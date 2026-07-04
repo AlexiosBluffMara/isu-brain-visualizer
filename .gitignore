@@ -1,0 +1,92 @@
+# Data - MRI volumes, PHI, de-identified patient data
+data/**/*.nii
+data/**/*.nii.gz
+data/**/*.mgz
+data/**/*.mha
+data/**/*.mhd
+data/**/*.raw
+data/**/*.dcm
+data/raw/
+data/nifti/
+data/processed/
+# OpenNeuro ds004199 is public CC0, but large. Keep the local dataset out of git.
+data/openneuro/ds004199/
+# keep notes and keepfiles tracked
+!data/README.md
+!data/.gitkeep
+
+# Outputs - generated volumes, heatmaps, PNGs; regenerable locally
+# Allow index.json and manifest.json to be committed for viewer bootstrap
+outputs/
+!outputs/.gitkeep
+!outputs/end_to_end/index.json
+!outputs/end_to_end/*/manifest.json
+
+# Local pip install target used during bootstrap
+.deps/
+
+# Model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.gguf
+*.pkl
+*.h5
+
+# Secrets and tokens
+.env
+.env.*
+*.token
+*.key
+secrets/
+credentials/
+*_credentials.json
+hf_token
+huggingface_token
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Caches
+.cache/
+.firecrawl/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo

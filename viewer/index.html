@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISU FCD Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0c1114;
+      color: #edf3f6;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #151c20;
+      border-bottom: 1px solid #2d3940;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 0.92rem;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #f7fbfd;
+    }
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: nowrap;
+    }
+    .group-label {
+      font-size: 0.67rem;
+      color: #aebbc3;
+      white-space: nowrap;
+      cursor: help;
+    }
+    select, input[type="text"] {
+      background: #0f1518;
+      color: #edf3f6;
+      border: 1px solid #3b4a53;
+      border-radius: 6px;
+      padding: 0.32rem 0.42rem;
+      font-size: 0.76rem;
+    }
+    input[type="range"] {
+      width: 94px;
+      accent-color: #e25353;
+      cursor: pointer;
+    }
+    .val { font-size: 0.74rem; min-width: 2.4rem; text-align: right; color: #c1cbd1; }
+    button {
+      padding: 0.32rem 0.56rem;
+      font-size: 0.74rem;
+      border-radius: 6px;
+      border: 1px solid #3b4a53;
+      background: #1b252a;
+      color: #edf3f6;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:hover { background: #26343b; border-color: #50636e; }
+    button.primary { border-color: #e25353; color: #ffe7e7; background: #422222; }
+    button.primary:hover { background: #552929; }
+
+    /* Main content area: canvas + side panel */
+    #main-area {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      background: #07090a;
+    }
+    #canvas-wrap {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      background: #050708;
+    }
+    #gl-canvas { display: block; width: 100%; height: 100%; }
+
+    /* Side panel */
+    #meta-panel {
+      width: 340px;
+      flex-shrink: 0;
+      background: #141b1f;
+      border-left: 1px solid #2d3940;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.15s;
+    }
+    #meta-panel.collapsed { width: 0; overflow: hidden; border-left: none; }
+    .meta-toggle {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      z-index: 10;
+      padding: 0.3rem 0.25rem;
+      font-size: 0.65rem;
+      background: #1b252a;
+      border: 1px solid #35434b;
+      border-right: none;
+      border-radius: 6px 0 0 6px;
+      cursor: pointer;
+      color: #d7e0e5;
+      writing-mode: vertical-rl;
+      letter-spacing: 0.05em;
+    }
+    .meta-toggle:hover { color: #fff; background: #26343b; }
+
+    /* Subject browser */
+    #subj-browser {
+      padding: 0.7rem 0.78rem 0.65rem;
+      border-bottom: 1px solid #26323a;
+      flex-shrink: 0;
+    }
+    .panel-section-title {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: #dce6eb;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 0.42rem;
+      cursor: help;
+    }
+    #subj-browser-row {
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+    }
+    #subj-select {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.71rem;
+      background: #0f1518;
+      color: #edf3f6;
+      border: 1px solid #3b4a53;
+      border-radius: 6px;
+      padding: 0.28rem 0.38rem;
+    }
+    #subj-prev, #subj-next {
+      padding: 0.15rem 0.38rem;
+      font-size: 0.8rem;
+      line-height: 1;
+    }
+    #subj-status {
+      font-size: 0.64rem;
+      color: #9cabb3;
+      margin-top: 0.22rem;
+    }
+
+    #viewer-controls {
+      padding: 0.7rem 0.78rem 0.65rem;
+      border-bottom: 1px solid #26323a;
+      flex-shrink: 0;
+    }
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .button-row {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.48rem;
+    }
+
+    /* Legend */
+    #legend-section {
+      padding: 0.7rem 0.78rem 0.65rem;
+      border-bottom: 1px solid #26323a;
+      flex-shrink: 0;
+    }
+    .legend-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.38rem;
+      margin-bottom: 0.42rem;
+    }
+    .legend-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      margin-top: 0.12rem;
+    }
+    .legend-text {
+      font-size: 0.66rem;
+      color: #c3ced5;
+      line-height: 1.35;
+    }
+    .legend-note {
+      font-size: 0.62rem;
+      color: #a4b1b8;
+      margin-top: 0.38rem;
+      line-height: 1.3;
+      border-top: 1px solid #26323a;
+      padding-top: 0.28rem;
+    }
+
+    /* Metadata */
+    #meta-content {
+      flex: 1;
+    }
+    .meta-section {
+      border-bottom: 1px solid #26323a;
+      padding: 0.68rem 0.78rem;
+    }
+    .meta-section-title {
+      font-size: 0.67rem;
+      font-weight: 600;
+      color: #dce6eb;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 0.38rem;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.3rem;
+      margin-bottom: 0.15rem;
+    }
+    .meta-key {
+      font-size: 0.68rem;
+      color: #9cabb3;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: help;
+    }
+    .meta-val {
+      font-size: 0.7rem;
+      color: #edf3f6;
+      text-align: right;
+      word-break: break-all;
+    }
+    .meta-val.highlight { color: #ff8e8e; font-weight: 600; }
+    #meta-empty {
+      padding: 1rem 0.65rem;
+      font-size: 0.72rem;
+      color: #9cabb3;
+    }
+
+    #status-bar {
+      flex-shrink: 0;
+      padding: 0.22rem 0.7rem;
+      font-size: 0.7rem;
+      color: #aebbc3;
+      background: #11181c;
+      border-top: 1px solid #26323a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      justify-content: space-between;
+    }
+    #status-msg { overflow: hidden; text-overflow: ellipsis; }
+    #proto-note { flex-shrink: 0; margin-left: 1rem; color: #ff9b9b; }
+    .overlay-row {
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+    }
+    .overlay-row input[type="checkbox"] { accent-color: #e25353; cursor: pointer; }
+    @media (max-width: 760px) {
+      body { height: auto; min-height: 100vh; overflow: auto; }
+      #main-area { flex-direction: column; min-height: 920px; }
+      #canvas-wrap { min-height: 600px; }
+      #meta-panel { width: 100%; border-left: none; border-top: 1px solid #2d3940; }
+      #meta-panel.collapsed { width: 100%; max-height: 0; border-top: none; }
+    }
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ISU FCD Viewer</h1>
+
+  <!-- Manifest URL -->
+  <div class="group">
+    <span class="group-label"
+          title="JSON manifest file listing the NIfTI paths for one subject. Paste a URL and click Load, or use the Subject Browser in the side panel.">Manifest URL</span>
+    <input type="text" id="manifest-url"
+           value="/outputs/end_to_end_fcd85_hd/sub-00058/manifest.json"
+           style="width:250px;"
+           title="Path or URL to a subject manifest.json - e.g. /outputs/end_to_end/sub-00058/manifest.json" />
+    <button id="btn-load-manifest" class="primary"
+            title="Fetch the manifest at the URL above and load all checked overlays into the viewer.">Load</button>
+  </div>
+
+  <!-- Base layer -->
+  <div class="group">
+    <span class="group-label"
+          title="Which structural MRI scan to show as the gray background image.">Base</span>
+    <select id="base-select"
+            title="Background anatomical image. FLAIR highlights abnormal water content and is best for spotting FCD. T1w shows anatomy with gray/white matter contrast. T2w is an alternative structural view.">
+      <option value="flair">FLAIR</option>
+      <option value="t2w">T2w</option>
+      <option value="t1w">T1w</option>
+    </select>
+  </div>
+
+  <button id="btn-splat-view"
+          title="Open the interactive 3D lesion splat for this subject in a new tab. The browser uses Three.js to render MRI-derived Gaussian splats with the expert lesion mask highlighted.">Open 3D Lesion Splat</button>
+</header>
+
+<div id="main-area">
+  <div id="canvas-wrap">
+    <canvas id="gl-canvas"></canvas>
+    <button class="meta-toggle" id="btn-meta-toggle"
+            title="Toggle the subject browser, color legend, and metadata panel on the right.">Info</button>
+  </div>
+
+  <!-- Side panel: subject browser + legend + metadata -->
+  <div id="meta-panel">
+
+    <!-- Subject browser -->
+    <div id="subj-browser">
+      <div class="panel-section-title"
+           title="Browse subjects processed by the pipeline. Populated automatically from /outputs/end_to_end/index.json when present.">Subject Browser</div>
+      <div id="subj-browser-row">
+        <select id="subj-select"
+                title="Select a subject to load their manifest. The dropdown is populated from /outputs/end_to_end/index.json on startup.">
+          <option value="">- no index loaded -</option>
+        </select>
+        <button id="subj-prev"
+                title="Load the previous subject in the list.">&lsaquo;</button>
+        <button id="subj-next"
+                title="Load the next subject in the list.">&rsaquo;</button>
+      </div>
+      <div id="subj-status">Checking for subject index&hellip;</div>
+    </div>
+
+    <div id="viewer-controls">
+      <div class="panel-section-title">Viewer Controls</div>
+      <label class="overlay-row"
+             title="Expert lesion mask - the provided OpenNeuro manual label of the confirmed Focal Cortical Dysplasia lesion. This is source data, not an algorithm guess.">
+        <input type="checkbox" id="chk-roi" checked /> Expert Lesion Mask
+      </label>
+
+      <div class="control-row">
+        <span class="meta-key" title="Expert lesion mask transparency. 0 = fully transparent; 1 = fully opaque.">Mask Opacity</span>
+        <span class="meta-val"><input type="range" id="opacity-slider" min="0" max="1" step="0.01" value="0.45"
+          title="Drag to change expert lesion mask opacity: 0 = invisible, 1 = solid red" /> <span class="val" id="opacity-val">0.45</span></span>
+      </div>
+      <div class="control-row">
+        <span class="meta-key" title="How many anatomical slice planes to show at once.">Layout</span>
+        <span class="meta-val"><select id="layout-select"
+          title="Multi-planar = axial + sagittal + coronal side by side; Axial only = single top-down slice; Sag+Cor+Ax = three-panel; 3D render = surface/volume render.">
+          <option value="3">Multi-planar</option>
+          <option value="1">Axial only</option>
+          <option value="2">Sag+Cor+Ax</option>
+          <option value="4">3D render</option>
+        </select></span>
+      </div>
+      <div class="button-row">
+        <button id="btn-crosshair"
+                title="Toggle the crosshair lines that mark the current slice position. ON = lines visible, OFF = hidden.">Crosshair: ON</button>
+        <button id="btn-reset"
+                title="Reset pan, zoom, and slice position back to the default center of the loaded volume.">Reset view</button>
+      </div>
+    </div>
+
+    <!-- Color legend -->
+    <div id="legend-section">
+      <div class="panel-section-title">Color Legend</div>
+
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#e03030;"></div>
+        <div class="legend-text"><strong>Red &mdash; Expert Lesion Mask:</strong> the provided OpenNeuro manual label for the Focal Cortical Dysplasia lesion. This is the source lesion data we trust for the demo.</div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: linear-gradient(to right, #fa0, #f60, #e00);"></div>
+        <div class="legend-text"><strong>Orange / red &mdash; 3D Lesion Splat:</strong> the same expert lesion mask translated into browser-rendered 3D Gaussian splats.</div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#111; border: 1px solid #444;"></div>
+        <div class="legend-text"><strong>Black / dark:</strong> background, low MRI signal, masked zero, or transparent empty overlay. Dark areas are <em>not</em> a lesion marker by themselves.</div>
+      </div>
+
+      <div class="legend-note">Educational visualization built from public research data.</div>
+    </div>
+
+    <!-- Metadata (replaced on manifest load) -->
+    <div id="meta-content">
+      <p id="meta-empty">Load a manifest to see metadata.</p>
+    </div>
+
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="status-msg">No volumes loaded. Select a subject in the side panel, or enter a manifest URL and click Load.</span>
+  <span id="proto-note">Educational visualization</span>
+</div>
+
+<!-- NiiVue: try modern ESM from jsDelivr; fall back to UMD if ESM unavailable -->
+<script type="module">
+  let Niivue, DRAG_MODE;
+
+  try {
+    const mod = await import("https://cdn.jsdelivr.net/npm/@niivue/niivue@0.47.0/dist/niivue.es.js");
+    Niivue = mod.Niivue;
+    DRAG_MODE = mod.DRAG_MODE;
+  } catch (_) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@niivue/niivue@0.47.0/dist/niivue.umd.min.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    Niivue = window.niivue.Niivue;
+    DRAG_MODE = window.niivue.DRAG_MODE;
+  }
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  let crosshairOn = true;
+  let currentManifest = null;
+
+  const nv = new Niivue({
+    isColorbar: false,
+    backColor: [0.06, 0.06, 0.08, 1],
+    crosshairColor: [0.15, 0.85, 0.15, 0.8],
+    show3Dcrosshair: false,
+    dragMode: DRAG_MODE ? DRAG_MODE.pan : 2,
+    isResizeCanvas: true,
+  });
+  nv.attachToCanvas(document.getElementById("gl-canvas"));
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  const status = (msg) => { document.getElementById("status-msg").textContent = msg; };
+
+  function overlayOpacity() {
+    return parseFloat(document.getElementById("opacity-slider").value);
+  }
+  async function safeLoad(fn) {
+    try { await fn(); }
+    catch (err) { status(`Error: ${err.message}`); console.error(err); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Subject browser
+  // ---------------------------------------------------------------------------
+  async function loadSubjectIndex() {
+    const root = new URLSearchParams(window.location.search).get("root") || "/outputs/end_to_end_fcd85_hd";
+    const indexUrl = `${root}/index.json`;
+    try {
+      const r = await fetch(indexUrl);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      // Accept [{subject, manifest_url}], {subjects:[...]}, or string[]
+      let entries = Array.isArray(data) ? data : (data.subjects || []);
+      if (entries.length && typeof entries[0] === "string") {
+        entries = entries.map(s => ({
+          subject: s,
+          manifest_url: `${root}/${s}/manifest.json`,
+        }));
+      }
+
+      const sel = document.getElementById("subj-select");
+      sel.innerHTML = "";
+      for (const entry of entries) {
+        const opt = document.createElement("option");
+        opt.value = entry.manifest_url || entry.manifest || `${root}/${entry.subject}/manifest.json`;
+        if (!opt.value.startsWith("/") && !opt.value.startsWith("http")) {
+          opt.value = `/outputs/end_to_end/${opt.value}`;
+        }
+        const group = entry.group ? String(entry.group).toUpperCase() : "?";
+        const roi = entry.roi_available ? "ROI" : "no ROI";
+        const mods = Array.isArray(entry.modalities) ? entry.modalities.join("+") : "";
+        opt.textContent = `${entry.subject || opt.value}  [${group}, ${roi}${mods ? ", " + mods : ""}]`;
+        sel.appendChild(opt);
+      }
+      document.getElementById("subj-status").textContent =
+        `${entries.length} subject${entries.length !== 1 ? "s" : ""} in index.`;
+    } catch (_) {
+      try {
+        const r = await fetch("/outputs/fcd85_subjects.txt", { cache: "no-store" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const entries = (await r.text())
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(s => /^sub-\d{5}$/.test(s))
+          .map(subject => ({
+            subject,
+            group: "fcd",
+            roi_available: true,
+            manifest_url: `${root}/${subject}/manifest.json`,
+          }));
+        const sel = document.getElementById("subj-select");
+        sel.innerHTML = "";
+        for (const entry of entries) {
+          const opt = document.createElement("option");
+          opt.value = entry.manifest_url;
+          opt.textContent = `${entry.subject}  [FCD, ROI]`;
+          sel.appendChild(opt);
+        }
+        document.getElementById("subj-status").textContent =
+          `${entries.length} FCD subjects loaded from fcd85_subjects.txt.`;
+      } catch (fallbackErr) {
+        document.getElementById("subj-status").textContent = "No subject index found.";
+      }
+    }
+  }
+
+  function navigateSubject(delta) {
+    const sel = document.getElementById("subj-select");
+    if (!sel.options.length || sel.options[0].value === "") return;
+    sel.selectedIndex = Math.max(0, Math.min(sel.options.length - 1, sel.selectedIndex + delta));
+    const url = sel.value;
+    if (url) {
+      document.getElementById("manifest-url").value = url;
+      safeLoad(() => loadManifest(url));
+    }
+  }
+
+  document.getElementById("subj-select").addEventListener("change", () => {
+    const url = document.getElementById("subj-select").value;
+    if (!url) return;
+    document.getElementById("manifest-url").value = url;
+    safeLoad(() => loadManifest(url));
+  });
+
+  document.getElementById("subj-prev").addEventListener("click", () => navigateSubject(-1));
+  document.getElementById("subj-next").addEventListener("click", () => navigateSubject(1));
+
+  // ---------------------------------------------------------------------------
+  // Metadata panel
+  // ---------------------------------------------------------------------------
+  function _row(key, val, help) {
+    if (val == null || val === "" || val === "n/a") return "";
+    const safeKey = String(key).replace(/</g, "&lt;");
+    const safeVal = String(val).replace(/</g, "&lt;");
+    const titleAttr = help ? ` title="${String(help).replace(/"/g, "&quot;")}"` : "";
+    return `<div class="meta-row"><span class="meta-key"${titleAttr}>${safeKey}</span><span class="meta-val">${safeVal}</span></div>`;
+  }
+
+  function _section(title, rows) {
+    const content = rows.filter(Boolean).join("");
+    if (!content) return "";
+    return `<div class="meta-section"><div class="meta-section-title">${title}</div>${content}</div>`;
+  }
+
+  function renderMetaPanel(manifest) {
+    const vm = manifest.viewer_meta || {};
+    const p = vm.participant || {};
+    const scan = vm.scan || {};
+    const geo = vm.geometry || {};
+    const roi = vm.roi || null;
+    const splatProfile = manifest.browser_splat_profile || {};
+    const splatMeta = manifest.patient_splat_lesion_highlighted_meta || {};
+
+    const group = (p.group || manifest.group || "").toUpperCase();
+    const groupClass = group === "FCD" ? " highlight" : "";
+    const hemisphereLabel = { L: "Left", R: "Right" }[p.hemisphere] || p.hemisphere;
+    const lobeLabel = {
+      FL: "Frontal Lobe",
+      PL: "Parietal Lobe",
+      TL: "Temporal Lobe",
+      OL: "Occipital Lobe",
+      IL: "Insular Lobe",
+    }[p.lobe] || p.lobe;
+    const histopathologyLabel = {
+      IIa: "Focal Cortical Dysplasia Type IIa",
+      IIb: "Focal Cortical Dysplasia Type IIb",
+    }[p.histopathology] || p.histopathology;
+
+    let html = "";
+
+    const subjRows = [
+      _row("ID", p.subject_id || manifest.subject),
+      `<div class="meta-row"><span class="meta-key">Group</span><span class="meta-val${groupClass}">${group || "?"}</span></div>`,
+      _row("Sex", p.sex),
+      _row("Age at scan", p.age_scan),
+      _row("Onset age", p.age_epilepsyonset),
+      _row("Diagnosis", p.mri_diagnosis),
+      _row("Hemisphere", hemisphereLabel),
+      _row("Lobe", lobeLabel),
+      _row("Histopathology", histopathologyLabel,
+           "Tissue subtype from the dataset. Type IIa means abnormal cortical cells without balloon cells. Type IIb includes balloon cells."),
+      _row("Split", p.split),
+    ];
+    html += _section("Subject", subjRows);
+
+    const mods = (manifest.modalities || []).join(", ");
+    const dsRows = [
+      _row("Dataset", "OpenNeuro ds004199"),
+      _row("BIDS version", "1.6.0"),
+      _row("Modalities", mods || scan.modality),
+      _row("ROI available", manifest.roi_available != null ? String(manifest.roi_available) : null),
+    ];
+    html += _section("Dataset", dsRows);
+
+    const scanRows = [
+      _row("Manufacturer", scan.Manufacturer),
+      _row("Model", scan.ManufacturersModelName),
+      _row("Field strength", scan.MagneticFieldStrength != null ? `${scan.MagneticFieldStrength} T` : null),
+      _row("Acquisition", scan.MRAcquisitionType),
+      _row("Protocol", scan.ProtocolName || scan.SeriesDescription),
+      _row("Slice thickness", scan.SliceThickness != null ? `${scan.SliceThickness} mm` : null),
+      _row("Echo time", scan.EchoTime != null ? `${scan.EchoTime} ms` : null),
+      _row("Rep. time", scan.RepetitionTime != null ? `${scan.RepetitionTime} s` : null),
+      _row("Inversion time", scan.InversionTime != null ? `${scan.InversionTime} s` : null),
+      _row("Flip angle", scan.FlipAngle != null ? `${scan.FlipAngle} deg` : null),
+      _row("Bandwidth", scan.PixelBandwidth != null ? `${scan.PixelBandwidth} Hz/px` : null),
+      _row("Conversion software", scan.ConversionSoftware,
+           "Tool used to convert scanner data into NIfTI/BIDS research files."),
+    ];
+    html += _section("Acquisition", scanRows);
+
+    const shape = Array.isArray(geo.shape) ? geo.shape.join("x") : null;
+    const spacingArr = Array.isArray(geo.voxel_spacing_mm) ? geo.voxel_spacing_mm : null;
+    const spacingLabel = spacingArr
+      ? spacingArr.map(v => v.toFixed(3)).join(" \xd7 ") + " mm (L\xd7AP\xd7SI)"
+      : null;
+    const spacingHelp = spacingArr
+      ? `Each voxel measures ${spacingArr.map(v => v.toFixed(2)).join(" \xd7 ")} mm. Smaller numbers = higher-resolution scan.`
+      : null;
+    const orient = Array.isArray(geo.orientation) ? geo.orientation.join("") : null;
+    const geoRows = [
+      _row("Shape (vox)", shape,
+           "Number of voxels along each axis: Left-Right \xd7 Anterior-Posterior \xd7 Superior-Inferior."),
+      _row("Spacing", spacingLabel, spacingHelp),
+      _row("Orientation", orient,
+           "Axis ordering in the NIfTI file header - e.g. RAS = Right-Anterior-Superior."),
+      _row("Dtype", geo.dtype,
+           "Numeric data type of the voxel values stored in memory."),
+      _row("Intensity p1",
+           geo.intensity_p1 != null ? geo.intensity_p1.toFixed(4) : null,
+           "1st-percentile voxel intensity - near the dark/background end of the signal range."),
+      _row("Intensity p99",
+           geo.intensity_p99 != null ? geo.intensity_p99.toFixed(4) : null,
+           "99th-percentile voxel intensity - near the bright end. Used to auto-scale the display window."),
+      _row("Intensity mean",
+           geo.intensity_mean != null ? geo.intensity_mean.toFixed(4) : null,
+           "Average voxel intensity after loading the MRI volume."),
+    ];
+    html += _section("Geometry", geoRows);
+
+    if (roi && !roi.error) {
+      const center = Array.isArray(roi.center_ijk)
+        ? roi.center_ijk.map(v => v.toFixed(0)).join(", ")
+        : null;
+      const boundsMin = Array.isArray(roi.bounds_min_ijk) ? roi.bounds_min_ijk.join(", ") : null;
+      const boundsMax = Array.isArray(roi.bounds_max_ijk) ? roi.bounds_max_ijk.join(", ") : null;
+      const volMm3 = roi.volume_mm3;
+      const volLabel = volMm3 != null
+        ? `${volMm3} mm\xb3 (about  ${(volMm3 / 1000).toFixed(2)} cm\xb3)`
+        : null;
+      const roiRows = [
+        _row("Voxel count", roi.voxel_count,
+             "Number of voxels the neurologist marked as lesion in the expert ROI mask."),
+        _row("Volume", volLabel,
+             "Physical size of the expert-drawn ROI. Typical FCD type II lesions range from ~0.5 cm\xb3 to ~10 cm\xb3."),
+        _row("Center (ijk)", center,
+             "Voxel-space coordinate of the lesion centroid (column, row, slice index)."),
+        _row("Bounds minimum (ijk)", boundsMin,
+             "First voxel corner of the expert lesion mask box."),
+        _row("Bounds maximum (ijk)", boundsMax,
+             "Last voxel corner of the expert lesion mask box."),
+      ];
+      html += _section("Lesion ROI", roiRows);
+    }
+
+    const splatRows = [
+      _row("Displayed splat points",
+           splatMeta.n_points || splatProfile.total_points,
+           "Point count in the browser-ready 3D lesion splat currently used by this product shell."),
+      _row("Anatomy points", splatProfile.anatomy_points || splatMeta.n_anatomy_points,
+           "Points sampled from the patient's MRI foreground anatomy."),
+      _row("Lesion points", splatProfile.lesion_points || splatMeta.n_lesion_points,
+           "Points sampled from the provided expert lesion mask only."),
+      _row("Lesion source", splatProfile.source_truth_for_lesion || splatMeta.source_truth_for_lesion,
+           "Confirms whether the red lesion highlight comes from the dataset label or from our own algorithm."),
+    ];
+    html += _section("3D Splat Source", splatRows);
+
+    if (!html) {
+      html = '<p id="meta-empty">No viewer_meta in manifest.</p>';
+    }
+    document.getElementById("meta-content").innerHTML = html;
+  }
+
+  function clearMetaPanel() {
+    document.getElementById("meta-content").innerHTML =
+      '<p id="meta-empty">Load a manifest to see metadata.</p>';
+  }
+
+  // Meta panel toggle
+  document.getElementById("btn-meta-toggle").addEventListener("click", () => {
+    document.getElementById("meta-panel").classList.toggle("collapsed");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Manifest loading
+  // ---------------------------------------------------------------------------
+  async function loadManifest(url) {
+    status(`Fetching manifest: ${url}...`);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
+    const manifest = await resp.json();
+    currentManifest = manifest;
+
+    const base = url.substring(0, url.lastIndexOf("/") + 1);
+    const arts = manifest.artifacts || manifest;
+
+    const baseChoice = document.getElementById("base-select").value;
+    const baseName = (baseChoice === "flair" && arts.patient_flair)
+      ? arts.patient_flair
+      : (baseChoice === "t2w" && arts.patient_t2w)
+        ? arts.patient_t2w
+        : (baseChoice === "t1w" && arts.patient_t1w)
+          ? arts.patient_t1w
+          : (arts.patient_flair || arts.patient_t2w || arts.patient_t1w);
+    if (!baseName) throw new Error("Manifest has no patient_flair, patient_t2w, or patient_t1w artifact.");
+
+    await nv.loadVolumes([
+      { url: base + baseName, colormap: "gray", cal_min: 0, cal_max: 1 },
+    ]);
+
+    const sel = document.getElementById("base-select");
+    sel.querySelector('[value="flair"]').disabled = !arts.patient_flair;
+    sel.querySelector('[value="t2w"]').disabled   = !arts.patient_t2w;
+    sel.querySelector('[value="t1w"]').disabled   = !arts.patient_t1w;
+
+    const loadedOverlays = await _syncOverlays(base, arts);
+
+    const subj = manifest.subject || "?";
+    const grp  = manifest.group  || "?";
+    const overlayLabel = loadedOverlays.length ? loadedOverlays.join(", ") : "none";
+    status(`Loaded ${subj} (${grp}) - base: ${baseName}  |  overlays: ${overlayLabel}`);
+
+    renderMetaPanel(manifest);
+  }
+
+  async function _syncOverlays(base, arts) {
+    const op = overlayOpacity();
+
+    const overlayDefs = [
+      { key: "lesion_roi",       checkId: "chk-roi",      colormap: "red",   cal_max: 1 },
+    ];
+
+    const loaded = [];
+    for (const def of overlayDefs) {
+      const cb = document.getElementById(def.checkId);
+      const enabled = cb ? cb.checked : false;
+      const candidateKeys = [def.key, ...(def.fallbackKeys || [])];
+      let selectedKey = null;
+      let artName = null;
+      for (const key of candidateKeys) {
+        if (arts[key]) { selectedKey = key; artName = arts[key]; break; }
+      }
+      if (enabled && artName) {
+        try {
+          await nv.addVolumeFromUrl({
+            url: base + artName,
+            colormap: def.colormap,
+            opacity: op,
+            cal_min: 0,
+            cal_max: def.cal_max,
+          });
+          loaded.push(selectedKey);
+        } catch (e) {
+          console.warn(`Could not load overlay ${selectedKey || def.key}:`, e);
+        }
+      }
+    }
+    return loaded;
+  }
+
+  function chooseSplatViewArtifact(arts) {
+    return "lesion-highlighted";
+  }
+
+  function splatUrlFromManifestUrl(manifestUrl, manifest) {
+    const arts = manifest?.artifacts || manifest || {};
+    const m = manifestUrl.match(/\/outputs\/([^\/]+)\/([^\/]+)\/manifest\.json(?:[?#].*)?$/);
+    const rootName = m ? m[1] : null;
+    const subj = m ? m[2] : (manifest?.subject || "");
+    const params = new URLSearchParams();
+    if (rootName) params.set("root", `/outputs/${rootName}`);
+    if (subj) params.set("subject", subj);
+    params.set("splat", chooseSplatViewArtifact(arts));
+    const query = params.toString();
+    return `/viewer/splat.html${query ? "?" + query : ""}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Controls
+  // ---------------------------------------------------------------------------
+
+  document.getElementById("btn-load-manifest").addEventListener("click", () => {
+    const url = document.getElementById("manifest-url").value.trim();
+    if (!url) return;
+    safeLoad(() => loadManifest(url));
+  });
+
+  // Auto-load on ?demo=1 or ?subject=sub-XXXXX (with optional ?root)
+  const params = new URLSearchParams(window.location.search);
+  async function _tryLoad(urls) {
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { method: "HEAD" });
+        if (r.ok) {
+          document.getElementById("manifest-url").value = url;
+          safeLoad(() => loadManifest(url));
+          return;
+        }
+      } catch (_) {}
+    }
+  }
+  const root = params.get("root") || "/outputs/end_to_end_fcd85_hd";
+  if (params.get("demo") === "1") {
+    _tryLoad([
+      `${root}/sub-00058/manifest.json`,
+      "/outputs/product_demo/sub-00058/manifest.json",
+    ]);
+  } else if (params.get("subject")) {
+    const subj = params.get("subject");
+    _tryLoad([
+      `${root}/${subj}/manifest.json`,
+      `/outputs/product_demo/${subj}/manifest.json`,
+    ]);
+  }
+
+  document.getElementById("btn-splat-view").addEventListener("click", () => {
+    const url = document.getElementById("manifest-url").value.trim();
+    if (!url) return;
+    window.open(splatUrlFromManifestUrl(url, currentManifest), "_blank");
+  });
+
+  document.getElementById("base-select").addEventListener("change", () => {
+    const url = document.getElementById("manifest-url").value.trim();
+    if (url && currentManifest) safeLoad(() => loadManifest(url));
+  });
+
+  ["chk-roi"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      const url = document.getElementById("manifest-url").value.trim();
+      if (url && currentManifest) safeLoad(() => loadManifest(url));
+    });
+  });
+
+  const opSlider = document.getElementById("opacity-slider");
+  opSlider.addEventListener("input", () => {
+    const v = parseFloat(opSlider.value);
+    document.getElementById("opacity-val").textContent = v.toFixed(2);
+    for (let i = 1; i < nv.volumes.length; i++) nv.setOpacity(i, v);
+    if (nv.volumes.length > 1) nv.drawScene();
+  });
+
+  document.getElementById("layout-select").addEventListener("change", (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (nv.setSliceType) nv.setSliceType(v === 4 ? nv.sliceTypeRender : v);
+    else if (nv.opts) nv.opts.sliceType = v;
+    nv.drawScene && nv.drawScene();
+  });
+
+  document.getElementById("btn-crosshair").addEventListener("click", () => {
+    crosshairOn = !crosshairOn;
+    document.getElementById("btn-crosshair").textContent =
+      `Crosshair: ${crosshairOn ? "ON" : "OFF"}`;
+    if (nv.opts) {
+      nv.opts.crosshairWidth = crosshairOn ? 1 : 0;
+      nv.drawScene && nv.drawScene();
+    }
+  });
+
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    nv.resetScene && nv.resetScene();
+    nv.drawScene && nv.drawScene();
+  });
+
+  // Start: try to populate subject browser from index
+  loadSubjectIndex();
+</script>
+
+</body>
+</html>

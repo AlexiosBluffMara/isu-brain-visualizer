@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISU Brain Visualizer</title>
+  <link rel="stylesheet" href="/viewer/app.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-strip">
+        <div class="brand">ISU Brain Visualizer</div>
+      </div>
+      <div class="control-strip">
+        <div class="search-row">
+          <input id="subject-search" type="search" placeholder="Search subject, lobe, side..." title="Filter the FCD subject list by subject ID, lobe, side, histopathology, or status." />
+        </div>
+        <div class="mode-row" role="group" aria-label="Viewer mode">
+          <button type="button" data-mode="mri" aria-pressed="false" title="Show the NiiVue MRI slice viewer with lesion overlays.">MRI Viewer</button>
+          <button type="button" data-mode="splat" aria-pressed="true" title="Show the lesion-highlighted 3D Gaussian splat.">3D Lesion Splat</button>
+          <button type="button" data-mode="sync" aria-pressed="false" title="Show MRI slices and 3D lesion splat together with shared subject controls.">Synced MRI + 3D</button>
+        </div>
+        <div class="quick-row">
+          <button id="prev-subject" type="button" title="Load the previous subject.">Prev</button>
+          <button id="next-subject" type="button" title="Load the next subject.">Next</button>
+          <button id="export-snapshot" type="button" title="Export a screenshot of the current teaching view.">Export Snapshot</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="rail" id="subject-panel">
+        <div class="rail-header">
+          <div class="rail-title">
+            <div class="eyebrow">Dataset</div>
+            <h1>OpenNeuro Focal Cortical Dysplasia lesion subjects</h1>
+          </div>
+          <button id="toggle-subject-panel" type="button" class="panel-toggle" aria-expanded="true" title="Hide OpenNeuro lesion subjects.">Hide</button>
+        </div>
+        <div class="subject-group-row" role="group" aria-label="Subject grouping">
+          <button type="button" data-group-filter="all" aria-pressed="true" title="Show all lesion subjects.">All</button>
+          <button type="button" data-group-filter="IIa" aria-pressed="false" title="Show Focal Cortical Dysplasia Type IIa subjects.">Type IIa</button>
+          <button type="button" data-group-filter="IIb" aria-pressed="false" title="Show Focal Cortical Dysplasia Type IIb subjects.">Type IIb</button>
+          <button type="button" data-group-filter="unknown" aria-pressed="false" title="Show subjects without a listed histopathology subtype.">Subtype not listed</button>
+        </div>
+        <div id="subject-list" class="subject-list" aria-label="Subject list"></div>
+      </aside>
+
+      <section class="stage">
+        <div class="viewer-label">
+          <div>
+            <div class="eyebrow">Active View</div>
+            <h2 id="viewer-title">Loading subject...</h2>
+            <p id="viewer-subtitle">Loading the MRI and lesion-highlighted splat.</p>
+          </div>
+          <div class="viewer-actions">
+            <a id="open-current" href="/viewer/" target="_blank" rel="noreferrer"><button id="open-current-button" type="button" class="primary" title="Open the active viewer in a separate browser tab.">Open Active View</button></a>
+          </div>
+        </div>
+
+        <div id="sync-controls" class="sync-controls hidden" aria-label="Synchronized 3D controls">
+          <span>3D remote</span>
+          <button type="button" data-splat-command="front" title="Point the 3D splat camera at the front view.">Front</button>
+          <button type="button" data-splat-command="left" title="Point the 3D splat camera at the left view.">Left</button>
+          <button type="button" data-splat-command="top" title="Point the 3D splat camera at the top view.">Top</button>
+          <button type="button" data-splat-command="rotate-left" title="Rotate the 3D splat left.">Rotate Left</button>
+          <button type="button" data-splat-command="rotate-right" title="Rotate the 3D splat right.">Rotate Right</button>
+          <button type="button" data-splat-command="zoom-in" title="Zoom into the 3D splat.">Zoom In</button>
+          <button type="button" data-splat-command="zoom-out" title="Zoom out of the 3D splat.">Zoom Out</button>
+          <button type="button" data-splat-command="reset" title="Reset the 3D splat camera.">Reset</button>
+        </div>
+
+        <div id="viewer-grid" class="viewer-grid">
+          <div id="niivue-wrap" class="frame-wrap hidden">
+            <iframe id="niivue-frame" title="NiiVue MRI viewer"></iframe>
+            <div id="niivue-loading" class="loading active">Loading MRI viewer...</div>
+          </div>
+          <div id="splat-wrap" class="frame-wrap">
+            <iframe id="splat-frame" title="Three.js lesion-highlighted Gaussian splat viewer"></iframe>
+            <div id="splat-loading" class="loading active">Loading 3D lesion splat...</div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="explain" id="guide-panel">
+        <div class="explain-header">
+          <div class="explain-title">
+            <div class="eyebrow">Plain language guide</div>
+            <h2>What the colors and words mean</h2>
+          </div>
+          <button id="toggle-guide-panel" type="button" class="panel-toggle" aria-expanded="true" title="Hide plain-language guide.">Hide</button>
+        </div>
+        <div class="metric-band">
+          <div class="metric"><span>Subjects</span><strong id="metric-count">0</strong></div>
+          <div class="metric"><span>Splat points</span><strong id="metric-points">pending</strong></div>
+          <div class="metric"><span>Lesion size</span><strong id="metric-volume">unknown</strong></div>
+          <div class="metric"><span>Location</span><strong id="metric-location">unknown</strong></div>
+        </div>
+        <section class="lesion-card" id="lesion-card" title="Measurement summary from the provided OpenNeuro metadata and expert lesion mask.">
+          <div class="eyebrow">Lesion measurement</div>
+          <h3 id="lesion-card-title">Loading measurements...</h3>
+          <dl>
+            <div><dt>Subtype</dt><dd id="lesion-subtype">unknown</dd></div>
+            <div><dt>Volume</dt><dd id="lesion-volume">unknown</dd></div>
+            <div><dt>Voxel count</dt><dd id="lesion-voxels">unknown</dd></div>
+            <div><dt>Center</dt><dd id="lesion-center">unknown</dd></div>
+            <div><dt>Bounds</dt><dd id="lesion-bounds">unknown</dd></div>
+            <div><dt>Source</dt><dd id="lesion-source">expert mask</dd></div>
+          </dl>
+        </section>
+        <section class="comparison-gallery" id="comparison-gallery" title="Nearby examples grouped by subtype, lobe, and side.">
+          <div class="eyebrow">Subject comparison gallery</div>
+          <h3>Similar examples</h3>
+          <div id="gallery-list" class="gallery-list"></div>
+        </section>
+        <div id="term-list" class="term-list"></div>
+        <div id="status-line" class="status-line">Starting viewer...</div>
+      </aside>
+    </main>
+  </div>
+  <script type="module" src="/viewer/app.js?v=20260704-ui-clarity"></script>
+</body>
+</html>

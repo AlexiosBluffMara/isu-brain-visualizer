@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fcd-prototype"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "nibabel>=5.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+monai = ["monai>=1.3", "torch>=2.0"]
+gaussian = ["torch>=2.3", "gsplat>=1.5"]
+
+[project.scripts]
+fcd-run-anomaly         = "fcd_prototype.anomaly_pipeline:main"
+fcd-preview-real        = "fcd_prototype.real_preview:main"
+fcd-download-ds         = "fcd_prototype.ds004199_download:main"
+fcd-make-seed           = "fcd_prototype.gaussian_seed:main"
+fcd-monai-ingest        = "fcd_prototype.monai_ingest:main"
+fcd-render-splat        = "fcd_prototype.gaussian_splat:main"
+fcd-build-demo          = "fcd_prototype.product_demo:main"
+fcd-build-end-to-end    = "fcd_prototype.end_to_end:main"
+fcd-train-gaussian-field  = "fcd_prototype.gaussian_field:main"
+fcd-gaussian-residual     = "fcd_prototype.gaussian_residual:main"
+fcd-paired-gaussian-residual = "fcd_prototype.paired_gaussian_residual:main"
+fcd-control-gaussian-prior   = "fcd_prototype.control_gaussian_prior:main"
+fcd-residual-candidates      = "fcd_prototype.residual_candidates:main"
+fcd-audit-splat-reconstruction = "fcd_prototype.splat_reconstruction_audit:main"
+fcd-propose-roi              = "fcd_prototype.candidate_roi:main"
+fcd-evaluate-candidate-roi   = "fcd_prototype.candidate_roi_evaluation:main"
+fcd-evaluate-cohort          = "fcd_prototype.cohort_evaluation:main"
+fcd-lesion-proposer          = "fcd_prototype.supervised_lesion_proposal:main"
+fcd-audit-mri                = "fcd_prototype.mri_data_audit:main"
+fcd-audit-synthetic-normal   = "fcd_prototype.synthetic_normal_audit:main"
+fcd-audit-gaussian-field     = "fcd_prototype.gaussian_field_audit:main"
+fcd-preflight-nvidia         = "fcd_prototype.nvidia_preflight:main"
+fcd-process-upload           = "fcd_prototype.uploaded_mri:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISU Brain Visualizer — 3D Lesion Splat</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #07080b;
+      color: #f0f2f6;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #0a0b0e;
+      border-bottom: 1px solid #262834;
+      padding: 0.75rem 1rem;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 0.75rem 1rem;
+      flex-shrink: 0;
+      font-size: 0.78rem;
+    }
+    .brand-block { min-width: 0; }
+    .eyebrow {
+      color: #9ca0aa;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    header h1 {
+      margin-top: 0.15rem;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+      font-weight: 700;
+      color: #f0f2f6;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      margin-top: 0.25rem;
+      color: #cdd0d8;
+      max-width: 72ch;
+      line-height: 1.35;
+      font-size: 0.78rem;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+    .grp { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .lbl { font-size: 0.7rem; color: #9ca0aa; white-space: nowrap; }
+    select, input[type="text"] {
+      background: #101117; color: #f0f2f6; border: 1px solid #383a47;
+      border-radius: 8px; padding: 0.25rem 0.45rem; font-size: 0.75rem;
+    }
+    input[type="range"] { width: 90px; accent-color: #cc0000; cursor: pointer; }
+    .val { font-size: 0.72rem; min-width: 2.6rem; text-align: right; color: #cdd0d8; }
+    button {
+      min-height: 32px;
+      padding: 0 0.65rem; font-size: 0.75rem; border-radius: 8px;
+      border: 1px solid #383a47; background: #1c1e28; color: #f0f2f6; cursor: pointer;
+    }
+    button:hover { border-color: #ee2d3f; }
+    button.act { border-color: #cc0000; background: #cc0000; color: #fff; }
+    #canvas-wrap { flex: 1; min-height: 0; position: relative; }
+    #three-canvas { display: block; width: 100%; height: 100%; }
+    #compare-labels {
+      position: absolute; left: 0; right: 0; bottom: 0.55rem;
+      display: none; justify-content: center; gap: clamp(1rem, 8vw, 6rem);
+      pointer-events: none; font-size: 0.68rem; color: #999;
+      text-shadow: 0 1px 3px #000;
+    }
+    #compare-labels span { min-width: 4.5rem; text-align: center; }
+    #compare-labels span:nth-child(3) { color: #d66; }
+    #status-bar {
+      flex-shrink: 0; padding: 0.2rem 0.8rem; font-size: 0.7rem; color: #555;
+      background: #0a0a12; border-top: 1px solid #1a1a22;
+      display: flex; justify-content: space-between; overflow: hidden;
+    }
+    #status-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #proto-note { flex-shrink: 0; margin-left: 1rem; color: #a33; }
+    #control-help {
+      position: absolute;
+      left: 0.75rem;
+      top: 0.75rem;
+      z-index: 3;
+      width: min(320px, calc(100vw - 1.5rem));
+      background: rgba(20, 21, 28, 0.88);
+      border: 1px solid #383a47;
+      border-radius: 8px;
+      padding: 0.7rem;
+      color: #ddd;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      backdrop-filter: blur(8px);
+    }
+    #control-help strong { display: block; color: #f6a917; margin-bottom: 0.25rem; }
+    #control-help .keys { color: #cdd0d8; margin-bottom: 0.55rem; }
+    #control-help .preset-row,
+    #control-help .nudge-grid {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    #control-help .nudge-grid { margin-top: 0.45rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand-block">
+    <div class="eyebrow">ISU Brain Visualizer</div>
+    <h1>3D Lesion Splat</h1>
+    <div class="subtitle">MRI-derived anatomy rendered lightly in 3D, with the provided OpenNeuro expert lesion mask highlighted. This view does not use residuals, heatmaps, or candidate guesses.</div>
+  </div>
+
+  <div class="toolbar">
+    <div class="grp">
+      <span class="lbl">Subject</span>
+      <select id="sel-subject" style="min-width:130px;"></select>
+      <button id="btn-reload" class="act">Load</button>
+    </div>
+
+    <div class="grp" title="The displayed splat scale is fixed so the lesion size stays tied to the MRI space instead of changing with a manual point-size slider.">
+      <span class="lbl">Scale</span>
+      <input type="hidden" id="rng-size" value="2.0" />
+      <span class="val" id="val-size" style="min-width:7.6rem;">Fixed MRI scale</span>
+    </div>
+
+    <div class="grp">
+      <span class="lbl">Opacity</span>
+      <input type="range" id="rng-opacity" min="0.05" max="1" step="0.05" value="0.35" />
+      <span class="val" id="val-opacity">0.35</span>
+    </div>
+
+  <div class="grp">
+    <span class="lbl">Color</span>
+    <select id="sel-color">
+      <option value="tissue" selected>Dense tissue</option>
+      <option value="intensity">Intensity (gray)</option>
+      <option value="depth">Depth (pseudo)</option>
+      <option value="fixed">Fixed (warm)</option>
+    </select>
+  </div>
+
+  <div class="grp">
+    <span class="lbl">Render</span>
+    <select id="sel-render">
+      <option value="volume" selected>Tissue volume</option>
+      <option value="audit">Gaussian audit</option>
+      <option value="radiograph">Radiograph</option>
+    </select>
+  </div>
+
+  <div class="grp">
+    <span class="lbl">View</span>
+    <select id="sel-artifact">
+      <option value="lesion-highlighted" selected>3D lesion splat</option>
+    </select>
+  </div>
+
+    <div class="grp">
+      <button id="btn-reset-cam">Reset camera</button>
+      <button id="btn-niivue">Open MRI Viewer</button>
+    </div>
+  </div>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="three-canvas"></canvas>
+  <div id="control-help">
+    <strong>3D controls</strong>
+    <div class="keys">
+      Mouse drag rotates freely. W/S and arrow up/down rotate vertically. A/D and arrow left/right rotate sideways. Q zooms out. E zooms in.
+    </div>
+    <div class="preset-row">
+      <button id="btn-view-front" type="button">Front</button>
+      <button id="btn-view-left" type="button">Left</button>
+      <button id="btn-view-top" type="button">Top</button>
+    </div>
+    <div class="nudge-grid">
+      <button id="btn-rotate-left" type="button">Rotate left</button>
+      <button id="btn-rotate-right" type="button">Rotate right</button>
+      <button id="btn-rotate-up" type="button">Rotate up</button>
+      <button id="btn-rotate-down" type="button">Rotate down</button>
+      <button id="btn-zoom-out" type="button">Zoom out</button>
+      <button id="btn-zoom-in" type="button">Zoom in</button>
+    </div>
+  </div>
+  <div id="compare-labels"></div>
+</div>
+
+<div id="status-bar">
+  <span id="status-msg">Loading index…</span>
+  <span id="proto-note">Educational 3D visualization</span>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// ---------------------------------------------------------------------------
+// Three.js setup
+// ---------------------------------------------------------------------------
+const canvas = document.getElementById("three-canvas");
+let currentPoints = null;  // THREE.Mesh or THREE.Group of instanced Gaussian ellipses
+let currentSplatMeshes = [];
+let currentMeta = null;
+let depthSortFrame = 0;
+const DEPTH_SORT_FRAME_INTERVAL = 12;
+const DEPTH_SORT_MIN_CAMERA_MOVE = 0.75;
+const DEPTH_SORT_MIN_CAMERA_ANGLE_DELTA = 0.0005;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x0c0c10, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 10000);
+camera.position.set(0, 0, 300);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+function resize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    for (const mesh of currentSplatMeshes) {
+      if (mesh.material?.uniforms?.uViewport) {
+        mesh.material.uniforms.uViewport.value.set(canvas.width, canvas.height);
+      }
+    }
+  }
+}
+window.addEventListener("resize", resize);
+resize();
+
+let animId = null;
+function animate() {
+  animId = requestAnimationFrame(animate);
+  controls.update();
+  maybeDepthSortCurrentSplat();
+  renderer.render(scene, camera);
+}
+animate();
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const status = (msg) => { document.getElementById("status-msg").textContent = msg; };
+let subjects = [];   // [{subject, group, manifest, ...}]
+
+function expandGroupLabel(group) {
+  const value = String(group || "").trim().toLowerCase();
+  if (value === "fcd") return "Focal Cortical Dysplasia";
+  if (value === "hc") return "Healthy Control";
+  return group || "unknown group";
+}
+
+// ---------------------------------------------------------------------------
+// Depth sorting — transparent Gaussian splats must be drawn far-to-near.
+// Without this, dense full-volume anatomy renders as a glittery point cloud
+// because nearer semi-transparent ellipses are blended before farther tissue.
+// ---------------------------------------------------------------------------
+function shouldDepthSort(mesh) {
+  const state = mesh.userData.depthSortState;
+  if (!state?.lastCameraPosition || !state?.lastCameraQuaternion) return true;
+  const moved = state.lastCameraPosition.distanceToSquared(camera.position)
+    > DEPTH_SORT_MIN_CAMERA_MOVE * DEPTH_SORT_MIN_CAMERA_MOVE;
+  const qDot = Math.abs(state.lastCameraQuaternion.dot(camera.quaternion));
+  const rotated = (1.0 - qDot) > DEPTH_SORT_MIN_CAMERA_ANGLE_DELTA;
+  return moved || rotated;
+}
+
+function rememberDepthSortCamera(mesh) {
+  mesh.userData.depthSortState = {
+    lastCameraPosition: camera.position.clone(),
+    lastCameraQuaternion: camera.quaternion.clone(),
+  };
+}
+
+function maybeDepthSortCurrentSplat(force = false) {
+  if (!currentSplatMeshes.length) return;
+  if (!force && (depthSortFrame = (depthSortFrame + 1) % DEPTH_SORT_FRAME_INTERVAL) !== 0) {
+    return;
+  }
+  for (const mesh of currentSplatMeshes) {
+    if (!mesh?.userData?.sourceSplatAttributes) continue;
+    if (!force && !shouldDepthSort(mesh)) continue;
+    sortSplatsByDepth(mesh);
+    rememberDepthSortCamera(mesh);
+  }
+}
+
+function sortSplatsByDepth(mesh) {
+  const geo = mesh.geometry;
+  const source = mesh.userData.sourceSplatAttributes;
+  const n = mesh.userData.splatCount ?? geo.getAttribute("aCenter")?.count ?? 0;
+  if (!source || n <= 1) return;
+
+  let order = mesh.userData.depthSortOrder;
+  if (!order || order.length !== n) {
+    order = Array.from({ length: n }, (_, i) => i);
+    mesh.userData.depthSortOrder = order;
+    mesh.userData.depthSortValues = new Float32Array(n);
+  }
+  const depth = mesh.userData.depthSortValues;
+
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const e = camera.matrixWorldInverse.elements;
+  const centers = source.centers;
+  for (let i = 0; i < n; i++) {
+    const j = i * 3;
+    const viewZ = e[2] * centers[j] + e[6] * centers[j + 1] + e[10] * centers[j + 2] + e[14];
+    depth[i] = -viewZ;
+  }
+  order.sort((a, b) => depth[b] - depth[a]); // far-to-near for alpha blending
+
+  const dstCenters = geo.getAttribute("aCenter").array;
+  const dstColors = geo.getAttribute("aColor").array;
+  const dstOpacities = geo.getAttribute("aOpacity").array;
+  const dstScales = geo.getAttribute("aScale").array;
+  const dstScaleVecs = geo.getAttribute("aScaleVec").array;
+  const dstQuats = geo.getAttribute("aQuat").array;
+
+  for (let dst = 0; dst < n; dst++) {
+    const src = order[dst];
+    const d3 = dst * 3;
+    const s3 = src * 3;
+    dstCenters[d3] = source.centers[s3];
+    dstCenters[d3 + 1] = source.centers[s3 + 1];
+    dstCenters[d3 + 2] = source.centers[s3 + 2];
+    dstColors[d3] = source.colors[s3];
+    dstColors[d3 + 1] = source.colors[s3 + 1];
+    dstColors[d3 + 2] = source.colors[s3 + 2];
+    dstScaleVecs[d3] = source.scaleVecs[s3];
+    dstScaleVecs[d3 + 1] = source.scaleVecs[s3 + 1];
+    dstScaleVecs[d3 + 2] = source.scaleVecs[s3 + 2];
+    dstOpacities[dst] = source.opacities[src];
+    dstScales[dst] = source.scales[src];
+
+    const d4 = dst * 4;
+    const s4 = src * 4;
+    dstQuats[d4] = source.quats[s4];
+    dstQuats[d4 + 1] = source.quats[s4 + 1];
+    dstQuats[d4 + 2] = source.quats[s4 + 2];
+    dstQuats[d4 + 3] = source.quats[s4 + 3];
+  }
+
+  for (const attrName of ["aCenter", "aColor", "aOpacity", "aScale", "aScaleVec", "aQuat"]) {
+    geo.getAttribute(attrName).needsUpdate = true;
+  }
+  mesh.userData.depthSorted = true;
+  mesh.userData.depthSortPasses = (mesh.userData.depthSortPasses || 0) + 1;
+}
+
+// ---------------------------------------------------------------------------
+// Index + manifest loading
+// ---------------------------------------------------------------------------
+
+// Resolve an artifact path: check manifest.artifacts[key] first (legacy nested
+// layout), then manifest[key] directly (flat layout written by gaussian_residual).
+function getArtifact(manifest, key) {
+  return manifest.artifacts?.[key] ?? manifest[key];
+}
+
+function chooseAutoSplatArtifact(names) {
+  if (names.lesionHighlightedPlyName) return "lesion-highlighted";
+  if (
+    names.controlPriorPatientPlyName &&
+    names.controlPriorMeanPlyName &&
+    names.controlPriorResidualPlyName
+  ) {
+    return "control-prior-compare";
+  }
+  if (
+    names.pairedPatientPlyName &&
+    names.pairedNormalPlyName &&
+    names.pairedResidualPlyName
+  ) {
+    return "paired-compare";
+  }
+  if (
+    names.optimizedPlyName &&
+    names.optimizedNormalPlyName &&
+    names.residualPlyName
+  ) {
+    return "optimized-compare";
+  }
+  if (names.controlPriorResidualPlyName) return "control-prior-residual";
+  if (names.pairedResidualPlyName) return "paired-residual";
+  if (names.optimizedPlyName) return "optimized";
+  if (names.densePlyName) return "dense";
+  if (names.stdPlyName) return "standard";
+  return "auto";
+}
+
+async function fetchPlyMesh(root, subjectId, plyName, meta = null) {
+  const plyUrl = `${root}/${subjectId}/${plyName}`;
+  const plyResp = await fetch(plyUrl);
+  if (!plyResp.ok) throw new Error(`HTTP ${plyResp.status} fetching ${plyUrl}`);
+  const plyBuf = await plyResp.arrayBuffer();
+  return parsePlyToPoints(plyBuf, meta);
+}
+
+function splatCountOf(obj) {
+  if (!obj) return 0;
+  if (obj.userData?.splatCount) return obj.userData.splatCount;
+  let total = 0;
+  obj.traverse?.((child) => {
+    total += child.userData?.splatCount || 0;
+  });
+  return total;
+}
+
+function makePairedComparisonGroup(patientMesh, normalMesh, residualMesh, compareMode = "paired_patient_normal_residual") {
+  const group = new THREE.Group();
+  const patientRadius = patientMesh.userData.boundingSphere?.radius || 120;
+  const normalRadius = normalMesh.userData.boundingSphere?.radius || patientRadius;
+  const spacing = Math.max(patientRadius, normalRadius, 120) * 1.9;
+
+  patientMesh.position.x = -spacing;
+  normalMesh.position.x = 0;
+  residualMesh.position.x = spacing;
+
+  patientMesh.userData.compareRole = "patient";
+  normalMesh.userData.compareRole = "synthetic-normal";
+  residualMesh.userData.compareRole = "residual";
+
+  group.add(patientMesh, normalMesh, residualMesh);
+  group.userData.compareMode = compareMode;
+  group.userData.splatCount = splatCountOf(patientMesh) + splatCountOf(normalMesh) + splatCountOf(residualMesh);
+  group.userData.boundingSphere = new THREE.Box3()
+    .setFromObject(group)
+    .getBoundingSphere(new THREE.Sphere());
+  return group;
+}
+
+function setCompareLabels(patient = "Patient", normal = "Synthetic normal", residual = "Residual") {
+  const labels = document.querySelectorAll("#compare-labels span");
+  if (labels.length >= 3) {
+    labels[0].textContent = patient;
+    labels[1].textContent = normal;
+    labels[2].textContent = residual;
+  }
+}
+
+function colorModeCode(value) {
+  return value === "tissue" ? 0 : value === "intensity" ? 1 : value === "depth" ? 2 : 3;
+}
+
+function renderModeCode(value) {
+  return value === "audit" ? 1 : value === "radiograph" ? 2 : value === "residual" ? 3 : 0;
+}
+
+function coverageBoostFromMeta(meta) {
+  if (!meta) return 1.0;
+  if (meta.sampling_mode === "volume") return 1.35;
+  if (meta.sampling_mode === "surface") return 1.08;
+  if (meta.gaussian_state_schema === "patient_control_gaussian_prior_v1") return 1.2;
+  if (meta.gaussian_state_schema === "paired_gaussian_residual_v1") return 1.2;
+  return 1.0;
+}
+
+function scaleBoostFromMeta(meta) {
+  if (!meta) return 1.0;
+  if (meta.gaussian_state_schema === "patient_control_gaussian_prior_v1") return 1.12;
+  if (meta.gaussian_state_schema === "paired_gaussian_residual_v1") return 1.12;
+  if (meta.sampling_mode === "volume") {
+    const density = Number(meta.density_voxels_per_splat);
+    if (Number.isFinite(density) && density > 1.0) {
+      return THREE.MathUtils.clamp(1.0 + Math.log2(Math.min(density, 96.0)) * 0.075, 1.08, 1.50);
+    }
+    return 1.18;
+  }
+  if (meta.sampling_mode === "surface") return 0.95;
+  return 1.0;
+}
+
+function setMaterialBlending(material, renderMode) {
+  if (renderMode === "radiograph" || renderMode === "residual") {
+    material.blending = THREE.AdditiveBlending;
+  } else {
+    material.blending = THREE.NormalBlending;
+  }
+  material.needsUpdate = true;
+}
+
+function configureSplatObject(obj, {
+  renderMode = null,
+  colorMode = null,
+  opacity = null,
+  pointSize = null,
+  coverageBoost = null,
+  scaleBoost = null,
+} = {}) {
+  const meshes = collectSplatMeshes(obj);
+  for (const mesh of meshes) {
+    const mat = mesh.material;
+    if (!mat?.uniforms) continue;
+    const rm = renderMode ?? document.getElementById("sel-render").value;
+    const cm = colorMode ?? document.getElementById("sel-color").value;
+    mat.uniforms.uRenderMode.value = renderModeCode(rm);
+    mat.uniforms.uColorMode.value = colorModeCode(cm);
+    if (opacity !== null) mat.uniforms.uOpacity.value = opacity;
+    if (pointSize !== null) mat.uniforms.uPointSize.value = pointSize;
+    if (coverageBoost !== null) mat.uniforms.uCoverageBoost.value = coverageBoost;
+    if (scaleBoost !== null && mat.uniforms.uScaleBoost) {
+      mat.uniforms.uScaleBoost.value = scaleBoost;
+    }
+    setMaterialBlending(mat, rm);
+  }
+}
+
+function setSliderValue(id, value, digits = 2) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id.replace("rng-", "val-"));
+  if (id === "rng-size" && el.type === "hidden") {
+    if (valEl) valEl.textContent = "Fixed MRI scale";
+    return;
+  }
+  el.value = String(value);
+  if (valEl) valEl.textContent = Number(value).toFixed(digits);
+}
+
+function applyArtifactRenderPreset(artifactLabel, meta) {
+  const renderSel = document.getElementById("sel-render");
+  const colorSel = document.getElementById("sel-color");
+  const isResidual = /residual|heatmap/i.test(artifactLabel);
+  if (isResidual) {
+    renderSel.value = "residual";
+    colorSel.value = "intensity";
+    setSliderValue("rng-size", 8.5);
+    setSliderValue("rng-opacity", 0.85);
+    return;
+  }
+  if (/lesion-highlighted/i.test(artifactLabel)) {
+    renderSel.value = "volume";
+    colorSel.value = "intensity";
+    setSliderValue("rng-size", 2.0);
+    setSliderValue("rng-opacity", 0.35);
+    return;
+  }
+  if (meta?.sampling_mode === "surface" || /standard direct/i.test(artifactLabel)) {
+    renderSel.value = "audit";
+    setSliderValue("rng-size", 5.5);
+    setSliderValue("rng-opacity", 0.72);
+    return;
+  }
+  renderSel.value = "volume";
+  colorSel.value = "tissue";
+  setSliderValue("rng-size", 7.0);
+  setSliderValue("rng-opacity", 0.42);
+}
+
+function artifactQualityLabel(manifest, artifactLabel, meta, plyName) {
+  const pieces = [];
+  const basename = String(plyName || "").split("/").pop();
+  const audit = manifest?.splat_reconstruction_audit_meta || {};
+  const auditedArtifact = audit.audited_artifact;
+
+  if (meta?.sampling_mode) {
+    const mode = meta.sampling_mode === "volume" ? "volume-sampled" :
+      meta.sampling_mode === "surface" ? "surface-biased" : `${meta.sampling_mode}-sampled`;
+    pieces.push(mode);
+  } else if (/optimized/i.test(artifactLabel)) {
+    pieces.push("learned covariance PLY");
+  } else if (/control-prior/i.test(artifactLabel)) {
+    pieces.push("patient-support healthy-control prior");
+  } else if (/paired/i.test(artifactLabel)) {
+    pieces.push("same-support Gaussian comparison");
+  }
+
+  const density = Number(meta?.density_voxels_per_splat);
+  if (Number.isFinite(density) && density > 0) {
+    pieces.push(`${density.toFixed(density >= 10 ? 0 : 1)} voxels per splat`);
+  }
+
+  if (auditedArtifact && basename && auditedArtifact === basename) {
+    const gate = audit.representation_readiness_gate || {};
+    const readiness = audit.mri_to_3dgs_readiness_status || gate.status;
+    if (readiness) {
+      const claim = audit.mri_to_3dgs_claim_allowed === true || gate.mri_to_3dgs_claim_allowed === true;
+      pieces.push(`3D Gaussian Splatting audit ${readiness}${claim ? " claim supported" : " visualization only"}`);
+    }
+  }
+  return pieces.join(" | ");
+}
+
+async function loadIndex() {
+  const params = new URLSearchParams(window.location.search);
+  const root = params.get("root") || "/outputs/end_to_end_fcd85_hd";
+  const url = root + "/index.json";
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const idx = await resp.json();
+    subjects = idx.subjects || [];
+    if (subjects.length <= 1) {
+      const fallback = await fetch("/outputs/fcd85_subjects.txt", { cache: "no-store" });
+      if (fallback.ok) {
+        subjects = (await fallback.text())
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(s => /^sub-\d{5}$/.test(s))
+          .map(subject => ({ subject, group: "fcd", roi_available: true }));
+      }
+    }
+    populateSelector();
+    status(`Loaded index — ${subjects.length} subject(s). Select one and click Load.`);
+  } catch (e) {
+    status(`Could not load index (${e.message}). Serve from repo root with: python -m http.server 8080`);
+    console.warn("Index load failed:", e);
+  }
+}
+
+function populateSelector() {
+  const sel = document.getElementById("sel-subject");
+  sel.innerHTML = "";
+  for (const s of subjects) {
+    const opt = document.createElement("option");
+    opt.value = s.subject;
+    opt.textContent = `${s.subject}  [${expandGroupLabel(s.group)}${s.roi_available ? ", Region of Interest" : ""}]`;
+    sel.appendChild(opt);
+  }
+  if (subjects.length > 0) {
+    const params = new URLSearchParams(window.location.search);
+    const req = params.get("subject");
+    if (req) sel.value = req;
+    document.getElementById("sel-artifact").value = "lesion-highlighted";
+  }
+}
+
+async function loadSubject(subjectId) {
+  const params = new URLSearchParams(window.location.search);
+  const root = params.get("root") || "/outputs/end_to_end_fcd85_hd";
+  const manifestUrl = `${root}/${subjectId}/manifest.json`;
+  status(`Fetching manifest for ${subjectId}…`);
+  const resp = await fetch(manifestUrl, { cache: "no-store" });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${manifestUrl}`);
+  const manifest = await resp.json();
+
+  document.getElementById("compare-labels").style.display = "none";
+  setCompareLabels();
+  const lesionHighlightedPlyName = getArtifact(manifest, "patient_splat_lesion_highlighted_ply");
+  const optimizedPlyName = getArtifact(manifest, "optimized_gaussian_splat_ply");
+  const optimizedNormalPlyName = getArtifact(manifest, "synthetic_normal_gaussian_splat_ply");
+  const controlPriorPatientPlyName  = getArtifact(manifest, "control_prior_patient_splat");
+  const controlPriorMeanPlyName     = getArtifact(manifest, "control_prior_mean_splat");
+  const controlPriorResidualPlyName = getArtifact(manifest, "control_prior_z_residual_splat");
+  const pairedResidualPlyName = getArtifact(manifest, "paired_gaussian_residual_splat");
+  const pairedPatientPlyName  = getArtifact(manifest, "paired_patient_splat");
+  const pairedNormalPlyName   = getArtifact(manifest, "paired_normal_splat");
+  const residualPlyName  = getArtifact(manifest, "gaussian_residual_splat") || getArtifact(manifest, "gaussian_residual_splat_ply");
+  const densePlyName     = getArtifact(manifest, "patient_splat_dense_ply");
+  const stdPlyName       = getArtifact(manifest, "patient_splat_ply");
+  document.getElementById("sel-artifact").value = "lesion-highlighted";
+  let artifactPref = document.getElementById("sel-artifact").value;
+  if (artifactPref === "auto") {
+    artifactPref = chooseAutoSplatArtifact({
+      controlPriorPatientPlyName,
+      controlPriorMeanPlyName,
+      controlPriorResidualPlyName,
+      pairedPatientPlyName,
+      pairedNormalPlyName,
+      pairedResidualPlyName,
+      optimizedPlyName,
+      lesionHighlightedPlyName,
+      optimizedNormalPlyName,
+      residualPlyName,
+      densePlyName,
+      stdPlyName,
+    });
+  }
+
+  let plyName, artifactLabel, metaKey, inlineMeta = null;
+  if (artifactPref === "lesion-highlighted") {
+    plyName = lesionHighlightedPlyName;
+    if (!plyName) throw new Error("No patient_splat_lesion_highlighted_ply in manifest.");
+    artifactLabel = "lesion-highlighted MRI splat";
+    metaKey = "patient_splat_lesion_highlighted_meta";
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "volume";
+  } else if (artifactPref === "control-prior-residual") {
+    plyName = controlPriorResidualPlyName;
+    if (!plyName) throw new Error("No control_prior_z_residual_splat in manifest.");
+    artifactLabel = "control-prior Gaussian z-residual heatmap";
+    metaKey = null;
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "residual";
+    inlineMeta = manifest.control_gaussian_prior_meta || null;
+  } else if (artifactPref === "control-prior-compare") {
+    if (!controlPriorPatientPlyName || !controlPriorMeanPlyName || !controlPriorResidualPlyName) {
+      throw new Error("Control-prior comparison requires patient, control mean, and z-residual splats.");
+    }
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "volume";
+    status(`Fetching control-prior comparison splats for ${subjectId}...`);
+    const meta = manifest.control_gaussian_prior_meta || null;
+    const [patientMesh, normalMesh, residualMesh] = await Promise.all([
+      fetchPlyMesh(root, subjectId, controlPriorPatientPlyName, meta),
+      fetchPlyMesh(root, subjectId, controlPriorMeanPlyName, meta),
+      fetchPlyMesh(root, subjectId, controlPriorResidualPlyName, meta),
+    ]);
+    configureSplatObject(patientMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(normalMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(residualMesh, { renderMode: "residual", colorMode: "intensity", opacity: 0.95, pointSize: 8.5 });
+    const group = makePairedComparisonGroup(patientMesh, normalMesh, residualMesh, "control_prior_patient_mean_residual");
+    currentMeta = meta;
+    replacePoints(group);
+    setCompareLabels("Patient", "Control prior", "Z-residual");
+    document.getElementById("compare-labels").style.display = "flex";
+
+    const grp = expandGroupLabel(manifest.group);
+    const n = splatCountOf(group);
+    document.getElementById("proto-note").textContent =
+      "patient-support healthy-control Gaussian prior / z-residual comparison";
+    status(
+      `${subjectId} (${grp}) — ${n.toLocaleString()} points [control-prior comparison] | ` +
+      `${controlPriorPatientPlyName} + ${controlPriorMeanPlyName} + ${controlPriorResidualPlyName} | depth-sorted alpha`
+    );
+    return manifest;
+  } else if (artifactPref === "control-prior-patient") {
+    plyName = controlPriorPatientPlyName;
+    if (!plyName) throw new Error("No control_prior_patient_splat in manifest.");
+    artifactLabel = "control-prior patient splat";
+    metaKey = null;
+    inlineMeta = manifest.control_gaussian_prior_meta || null;
+  } else if (artifactPref === "control-prior-mean") {
+    plyName = controlPriorMeanPlyName;
+    if (!plyName) throw new Error("No control_prior_mean_splat in manifest.");
+    artifactLabel = "control-prior healthy-control mean splat";
+    metaKey = null;
+    inlineMeta = manifest.control_gaussian_prior_meta || null;
+  } else if (artifactPref === "paired-residual") {
+    plyName = pairedResidualPlyName;
+    if (!plyName) throw new Error("No paired_gaussian_residual_splat in manifest.");
+    artifactLabel = "paired patient-vs-normal residual heatmap";
+    metaKey = null;
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "residual";
+  } else if (artifactPref === "paired-compare") {
+    if (!pairedPatientPlyName || !pairedNormalPlyName || !pairedResidualPlyName) {
+      throw new Error("Paired comparison requires paired patient, normal, and residual splats.");
+    }
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "volume";
+    status(`Fetching paired comparison splats for ${subjectId}...`);
+    const [patientMesh, normalMesh, residualMesh] = await Promise.all([
+      fetchPlyMesh(root, subjectId, pairedPatientPlyName),
+      fetchPlyMesh(root, subjectId, pairedNormalPlyName),
+      fetchPlyMesh(root, subjectId, pairedResidualPlyName),
+    ]);
+    configureSplatObject(patientMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(normalMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(residualMesh, { renderMode: "residual", colorMode: "intensity", opacity: 0.95, pointSize: 8.5 });
+    const group = makePairedComparisonGroup(patientMesh, normalMesh, residualMesh);
+    currentMeta = null;
+    replacePoints(group);
+    document.getElementById("compare-labels").style.display = "flex";
+
+    const grp = expandGroupLabel(manifest.group);
+    const n = splatCountOf(group);
+    document.getElementById("proto-note").textContent =
+      "paired patient / normal / residual comparison";
+    status(
+      `${subjectId} (${grp}) — ${n.toLocaleString()} points [paired comparison] | ` +
+      `${pairedPatientPlyName} + ${pairedNormalPlyName} + ${pairedResidualPlyName} | depth-sorted alpha`
+    );
+    return manifest;
+  } else if (artifactPref === "optimized-compare") {
+    if (!optimizedPlyName || !optimizedNormalPlyName || !residualPlyName) {
+      throw new Error("Optimized comparison requires optimized patient, synthetic-normal, and residual splats.");
+    }
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "volume";
+    status(`Fetching optimized comparison splats for ${subjectId}...`);
+    const [patientMesh, normalMesh, residualMesh] = await Promise.all([
+      fetchPlyMesh(root, subjectId, optimizedPlyName),
+      fetchPlyMesh(root, subjectId, optimizedNormalPlyName),
+      fetchPlyMesh(root, subjectId, residualPlyName),
+    ]);
+    configureSplatObject(patientMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(normalMesh, { renderMode: "volume", colorMode: "tissue", opacity: 0.42, pointSize: 7.0 });
+    configureSplatObject(residualMesh, { renderMode: "residual", colorMode: "intensity", opacity: 0.95, pointSize: 8.5 });
+    const group = makePairedComparisonGroup(patientMesh, normalMesh, residualMesh, "optimized_patient_normal_residual");
+    currentMeta = null;
+    replacePoints(group);
+    document.getElementById("compare-labels").style.display = "flex";
+
+    const grp = expandGroupLabel(manifest.group);
+    const n = splatCountOf(group);
+    document.getElementById("proto-note").textContent =
+      "optimized patient / synthetic-normal / residual comparison";
+    status(
+      `${subjectId} (${grp}) — ${n.toLocaleString()} points [optimized comparison] | ` +
+      `${optimizedPlyName} + ${optimizedNormalPlyName} + ${residualPlyName} | depth-sorted alpha`
+    );
+    return manifest;
+  } else if (artifactPref === "paired-patient") {
+    plyName = pairedPatientPlyName;
+    if (!plyName) throw new Error("No paired_patient_splat in manifest.");
+    artifactLabel = "paired patient splat";
+    metaKey = null;
+  } else if (artifactPref === "paired-normal") {
+    plyName = pairedNormalPlyName;
+    if (!plyName) throw new Error("No paired_normal_splat in manifest.");
+    artifactLabel = "paired synthetic-normal splat";
+    metaKey = null;
+  } else if (artifactPref === "residual") {
+    plyName = residualPlyName;
+    if (!plyName) throw new Error("No gaussian_residual_splat or gaussian_residual_splat_ply in manifest (run fcd-gaussian-residual first).");
+    artifactLabel = "Gaussian residual heatmap";
+    metaKey = null;
+    // Show heatmap colors by default for residual artifacts
+    document.getElementById("sel-color").value = "intensity";
+    document.getElementById("sel-render").value = "residual";
+  } else if (artifactPref === "optimized") {
+    plyName = optimizedPlyName;
+    if (!plyName) throw new Error("No optimized_gaussian_splat_ply in manifest (run --train-gaussian-field).");
+    artifactLabel = "optimized Gaussian field";
+    metaKey = null;
+  } else if (artifactPref === "dense") {
+    plyName = densePlyName;
+    if (!plyName) throw new Error("No patient_splat_dense_ply in manifest.");
+    artifactLabel = "dense direct splat";
+    metaKey = "patient_splat_dense_meta";
+  } else if (artifactPref === "standard") {
+    plyName = stdPlyName;
+    if (!plyName) throw new Error("No patient_splat_ply in manifest.");
+    artifactLabel = "standard direct splat";
+    metaKey = "patient_splat_meta";
+  } else {
+    throw new Error("No supported splat artifact found in manifest.");
+  }
+  if (!plyName) throw new Error("No splat PLY artifact found in manifest.");
+
+  status(`Fetching PLY: ${plyName}…`);
+
+  let meta = inlineMeta;
+  if (metaKey) {
+    const metaName = getArtifact(manifest, metaKey);
+    if (metaName) {
+      try {
+        const mResp = await fetch(`${root}/${subjectId}/${metaName}`);
+        if (mResp.ok) meta = await mResp.json();
+      } catch (_) {}
+    }
+  }
+  currentMeta = meta;
+  applyArtifactRenderPreset(artifactLabel, meta);
+
+  const pts = await fetchPlyMesh(root, subjectId, plyName, meta);
+  replacePoints(pts);
+
+  const n = splatCountOf(pts);
+  const grp = expandGroupLabel(manifest.group);
+  const sortLabel = pts.userData.depthSorted ? " | depth-sorted alpha" : "";
+  const qualityLabel = artifactQualityLabel(manifest, artifactLabel, meta, plyName);
+  document.getElementById("proto-note").textContent =
+    qualityLabel ? `${artifactLabel} | ${qualityLabel}` : `${artifactLabel} | educational 3D visualization`;
+  status(
+    `${subjectId} (${grp}) — ${n.toLocaleString()} points [${artifactLabel}] | ` +
+    `${plyName}${sortLabel}${qualityLabel ? " | " + qualityLabel : ""}`
+  );
+  return manifest;
+}
+
+// ---------------------------------------------------------------------------
+// PLY parser (binary_little_endian, our specific schema)
+// ---------------------------------------------------------------------------
+function parsePlyToPoints(buffer, meta) {
+  const text = new TextDecoder("ascii").decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 4096)));
+  const endHeaderIdx = text.indexOf("end_header");
+  if (endHeaderIdx === -1) throw new Error("PLY: end_header not found");
+  const headerText = text.slice(0, endHeaderIdx);
+  const headerBytes = new TextEncoder().encode(headerText + "end_header\n").length;
+
+  const lines = headerText.split("\n").map(l => l.trim()).filter(Boolean);
+  let nVerts = 0;
+  const props = [];
+  let inVertex = false;
+  for (const line of lines) {
+    if (line.startsWith("element vertex")) { nVerts = parseInt(line.split(/\s+/)[2]); inVertex = true; }
+    else if (line.startsWith("element") && !line.startsWith("element vertex")) inVertex = false;
+    else if (inVertex && line.startsWith("property")) {
+      const parts = line.split(/\s+/);
+      props.push({ type: parts[1], name: parts[2] });
+    }
+  }
+
+  const TYPE_SIZES = { float: 4, uchar: 1, int: 4, uint: 4, short: 2, double: 8 };
+  let stride = 0;
+  const offsets = {};
+  for (const p of props) {
+    offsets[p.name] = stride;
+    stride += TYPE_SIZES[p.type] ?? 4;
+  }
+
+  const data = new DataView(buffer, headerBytes);
+  const centers   = new Float32Array(nVerts * 3);
+  const colors    = new Float32Array(nVerts * 3);
+  const opacities = new Float32Array(nVerts);
+  const scales    = new Float32Array(nVerts);   // uniform fallback scale for ellipse sizing
+  const scaleVecs = new Float32Array(nVerts * 3);
+  const quats     = new Float32Array(nVerts * 4);
+
+  // Recentering: prefer meta bbox center, else compute from actual point min/max.
+  // Arithmetic mean drifts toward high-density clusters; bbox center is stable.
+  let cx, cy, cz;
+  if (meta && meta.world_bounds_min && meta.world_bounds_max) {
+    cx = (meta.world_bounds_min[0] + meta.world_bounds_max[0]) / 2;
+    cy = (meta.world_bounds_min[1] + meta.world_bounds_max[1]) / 2;
+    cz = (meta.world_bounds_min[2] + meta.world_bounds_max[2]) / 2;
+  } else {
+    let mnX = Infinity, mxX = -Infinity;
+    let mnY = Infinity, mxY = -Infinity;
+    let mnZ = Infinity, mxZ = -Infinity;
+    for (let i = 0; i < nVerts; i++) {
+      const base = i * stride;
+      const px = data.getFloat32(base + offsets.x, true);
+      const py = data.getFloat32(base + offsets.y, true);
+      const pz = data.getFloat32(base + offsets.z, true);
+      if (px < mnX) mnX = px; if (px > mxX) mxX = px;
+      if (py < mnY) mnY = py; if (py > mxY) mxY = py;
+      if (pz < mnZ) mnZ = pz; if (pz > mxZ) mxZ = pz;
+    }
+    cx = (mnX + mxX) / 2; cy = (mnY + mxY) / 2; cz = (mnZ + mxZ) / 2;
+  }
+
+  for (let i = 0; i < nVerts; i++) {
+    const base = i * stride;
+    centers[i * 3]     = data.getFloat32(base + offsets.x, true) - cx;
+    centers[i * 3 + 1] = data.getFloat32(base + offsets.y, true) - cy;
+    centers[i * 3 + 2] = data.getFloat32(base + offsets.z, true) - cz;
+
+    const r = data.getUint8(base + offsets.red) / 255;
+    const g = "green" in offsets ? data.getUint8(base + offsets.green) / 255 : r;
+    const b = "blue"  in offsets ? data.getUint8(base + offsets.blue)  / 255 : r;
+    colors[i * 3]     = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+
+    opacities[i] = "opacity" in offsets ? data.getFloat32(base + offsets.opacity, true) : 0.75;
+
+    // Average scale as a proxy for splat radius; used for depth-aware point sizing
+    const sx = "scale_x" in offsets ? data.getFloat32(base + offsets.scale_x, true) : 1.0;
+    const sy = "scale_y" in offsets ? data.getFloat32(base + offsets.scale_y, true) : 1.0;
+    const sz = "scale_z" in offsets ? data.getFloat32(base + offsets.scale_z, true) : 1.0;
+    scales[i] = (sx + sy + sz) / 3.0;
+    scaleVecs[i * 3]     = sx;
+    scaleVecs[i * 3 + 1] = sy;
+    scaleVecs[i * 3 + 2] = sz;
+
+    const rw = "rot_w" in offsets ? data.getFloat32(base + offsets.rot_w, true) : 1.0;
+    const rx = "rot_x" in offsets ? data.getFloat32(base + offsets.rot_x, true) : 0.0;
+    const ry = "rot_y" in offsets ? data.getFloat32(base + offsets.rot_y, true) : 0.0;
+    const rz = "rot_z" in offsets ? data.getFloat32(base + offsets.rot_z, true) : 0.0;
+    quats[i * 4]     = rw;
+    quats[i * 4 + 1] = rx;
+    quats[i * 4 + 2] = ry;
+    quats[i * 4 + 3] = rz;
+  }
+
+  const quadCorners = new Float32Array([
+    -1, -1,   1, -1,   1,  1,
+    -1, -1,   1,  1,  -1,  1,
+  ]);
+  const quadPositions = new Float32Array([
+    -1, -1, 0,   1, -1, 0,   1,  1, 0,
+    -1, -1, 0,   1,  1, 0,  -1,  1, 0,
+  ]);
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(quadPositions, 3));
+  geo.setAttribute("aCorner", new THREE.BufferAttribute(quadCorners, 2));
+  geo.setAttribute("aCenter",   new THREE.InstancedBufferAttribute(centers, 3));
+  geo.setAttribute("aColor",    new THREE.InstancedBufferAttribute(colors, 3));
+  geo.setAttribute("aOpacity",  new THREE.InstancedBufferAttribute(opacities, 1));
+  geo.setAttribute("aScale",    new THREE.InstancedBufferAttribute(scales, 1));
+  geo.setAttribute("aScaleVec", new THREE.InstancedBufferAttribute(scaleVecs, 3));
+  geo.setAttribute("aQuat",     new THREE.InstancedBufferAttribute(quats, 4));
+  geo.instanceCount = nVerts;
+
+  const bbox = new THREE.Box3();
+  for (let i = 0; i < nVerts; i++) {
+    bbox.expandByPoint(new THREE.Vector3(centers[i * 3], centers[i * 3 + 1], centers[i * 3 + 2]));
+  }
+  const sphere = new THREE.Sphere();
+  bbox.getBoundingSphere(sphere);
+  geo.boundingBox = bbox;
+  geo.boundingSphere = sphere;
+
+  const mat = makeMaterial(meta);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.userData.splatCount = nVerts;
+  mesh.userData.boundingSphere = sphere;
+  mesh.userData.sourceMeta = meta;
+  mesh.userData.sourceSplatAttributes = {
+    centers: centers.slice(),
+    colors: colors.slice(),
+    opacities: opacities.slice(),
+    scales: scales.slice(),
+    scaleVecs: scaleVecs.slice(),
+    quats: quats.slice(),
+  };
+  mesh.userData.depthSortState = {
+    lastCameraPosition: null,
+    lastCameraQuaternion: null,
+  };
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Material — projected Gaussian covariance ellipses with render-mode-specific
+// alpha kernels and blending for tissue, audit, radiograph, and residual views.
+// ---------------------------------------------------------------------------
+function makeMaterial(meta = null) {
+  const userOpacity = parseFloat(document.getElementById("rng-opacity").value);
+  const pointSize   = parseFloat(document.getElementById("rng-size").value);
+  const colorMode   = document.getElementById("sel-color").value;
+  const renderMode  = document.getElementById("sel-render").value;
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uPointSize:  { value: pointSize },
+      uOpacity:    { value: userOpacity },
+      uColorMode:  { value: colorModeCode(colorMode) },
+      uRenderMode: { value: renderModeCode(renderMode) },
+      uCoverageBoost: { value: coverageBoostFromMeta(meta) },
+      uScaleBoost: { value: scaleBoostFromMeta(meta) },
+      uCamPos:     { value: camera.position },
+      uViewport:   { value: new THREE.Vector2(canvas.width, canvas.height) },
+    },
+    vertexShader: `
+      attribute vec2  aCorner;
+      attribute vec3  aCenter;
+      attribute float aOpacity;
+      attribute vec3  aColor;
+      attribute float aScale;
+      attribute vec3  aScaleVec;
+      attribute vec4  aQuat;
+      varying vec3  vColor;
+      varying float vOpacity;
+      varying float vDepth;
+      varying vec2  vCorner;
+      uniform float uPointSize;
+      uniform int   uRenderMode;
+      uniform vec2  uViewport;
+      uniform float uScaleBoost;
+
+      vec3 quatRotate(vec4 q, vec3 v) {
+        q = normalize(q);
+        return v + 2.0 * cross(q.yzw, cross(q.yzw, v) + q.x * v);
+      }
+
+      void main() {
+        vColor   = aColor;
+        vOpacity = aOpacity;
+        vCorner  = aCorner;
+        vec4 mvCenter = modelViewMatrix * vec4(aCenter, 1.0);
+        vDepth = -mvCenter.z;
+
+        // Depth-aware visual gain keeps ellipses readable as you zoom while the
+        // orientation still comes from the Gaussian's projected 3D covariance.
+        float depthAtten = clamp(300.0 / max(vDepth, 1.0), 0.4, 8.0);
+
+        mat3 mv3 = mat3(modelViewMatrix);
+        vec3 axisX = mv3 * quatRotate(aQuat, vec3(aScaleVec.x, 0.0, 0.0));
+        vec3 axisY = mv3 * quatRotate(aQuat, vec3(0.0, aScaleVec.y, 0.0));
+        vec3 axisZ = mv3 * quatRotate(aQuat, vec3(0.0, 0.0, aScaleVec.z));
+
+        vec2 sx = axisX.xy * uPointSize * depthAtten;
+        vec2 sy = axisY.xy * uPointSize * depthAtten;
+        vec2 sz = axisZ.xy * uPointSize * depthAtten;
+
+        // 2D projected covariance C = Σ axis axis^T.  The eigenvectors become
+        // the screen-space ellipse axes for this splat.
+        float c00 = dot(vec3(sx.x, sy.x, sz.x), vec3(sx.x, sy.x, sz.x));
+        float c01 = dot(vec3(sx.x, sy.x, sz.x), vec3(sx.y, sy.y, sz.y));
+        float c11 = dot(vec3(sx.y, sy.y, sz.y), vec3(sx.y, sy.y, sz.y));
+        float trace = c00 + c11;
+        float disc = sqrt(max((c00 - c11) * (c00 - c11) + 4.0 * c01 * c01, 0.0));
+        float lambdaMajor = max(0.0, 0.5 * (trace + disc));
+        float lambdaMinor = max(0.0, 0.5 * (trace - disc));
+
+        vec2 dirMajor = vec2(c01, lambdaMajor - c00);
+        if (dot(dirMajor, dirMajor) < 1e-8) {
+          dirMajor = c00 >= c11 ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        } else {
+          dirMajor = normalize(dirMajor);
+        }
+        vec2 dirMinor = vec2(-dirMajor.y, dirMajor.x);
+
+        float renderGain = (uRenderMode == 0 ? 1.22 : (uRenderMode == 2 ? 1.55 : 1.0)) * uScaleBoost;
+        float major = clamp(sqrt(lambdaMajor) * 0.65 * renderGain, 1.0, 128.0);
+        float minor = clamp(sqrt(lambdaMinor) * 0.65 * renderGain, 1.0, major);
+        vec2 pixelOffset = aCorner.x * dirMajor * major + aCorner.y * dirMinor * minor;
+        vec2 ndcOffset = (pixelOffset / max(uViewport, vec2(1.0))) * 2.0;
+
+        vec4 clipCenter = projectionMatrix * mvCenter;
+        gl_Position = clipCenter + vec4(ndcOffset * clipCenter.w, 0.0, 0.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3  vColor;
+      varying float vOpacity;
+      varying float vDepth;
+      varying vec2  vCorner;
+      uniform float uOpacity;
+      uniform int   uColorMode;
+      uniform int   uRenderMode;
+      uniform float uCoverageBoost;
+
+      void main() {
+        float r2 = dot(vCorner, vCorner);   // unit ellipse coordinates
+        if (r2 > 1.0) discard;
+        float gaussian;
+        float alpha;
+        if (uRenderMode == 0) {
+          gaussian = exp(-1.65 * r2);
+          alpha = uOpacity * (0.16 + 1.25 * vOpacity) * gaussian * uCoverageBoost;
+          alpha = clamp(alpha, 0.0, 0.88);
+        } else if (uRenderMode == 2) {
+          gaussian = exp(-1.15 * r2);
+          alpha = clamp(uOpacity * (0.08 + 0.70 * vOpacity) * gaussian, 0.0, 0.32);
+        } else if (uRenderMode == 3) {
+          gaussian = exp(-2.20 * r2);
+          alpha = clamp(uOpacity * (0.12 + 1.65 * vOpacity) * gaussian, 0.0, 0.95);
+        } else {
+          gaussian = exp(-3.5 * r2);       // Gaussian kernel, sigma ~0.53 of radius
+          alpha = uOpacity * vOpacity * gaussian;
+        }
+
+        vec3 col;
+        if (uRenderMode == 3) {
+          float heat = clamp(dot(vColor, vec3(0.299, 0.587, 0.114)) * 1.35, 0.0, 1.0);
+          col = mix(vec3(0.45, 0.04, 0.02), vec3(1.0, 0.9, 0.2), heat);
+        } else if (uRenderMode == 2) {
+          float lum = dot(vColor, vec3(0.299, 0.587, 0.114));
+          col = mix(vec3(0.34, 0.42, 0.54), vec3(0.95, 0.86, 0.70), clamp(lum * 1.25, 0.0, 1.0));
+        } else if (uColorMode == 0) {
+          // Dense tissue — boosted mid-tone pinkish-cream, high base brightness
+          float lum = dot(vColor, vec3(0.299, 0.587, 0.114));
+          col = mix(vec3(0.82, 0.65, 0.55), vec3(1.0, 0.88, 0.78), clamp(lum * 1.4, 0.0, 1.0));
+        } else if (uColorMode == 1) {
+          // Intensity — slight warm tint
+          col = vColor * vec3(1.0, 0.95, 0.88);
+        } else if (uColorMode == 2) {
+          float t = clamp(vDepth / 400.0, 0.0, 1.0);
+          col = mix(vec3(0.2, 0.5, 0.9), vec3(0.9, 0.4, 0.1), t);
+        } else {
+          col = vec3(0.95, 0.55, 0.2) * vColor.r;
+        }
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    vertexColors: false,
+    side: THREE.DoubleSide,
+  });
+  setMaterialBlending(mat, renderMode);
+  return mat;
+}
+
+function fitCameraToSphere(sphere) {
+  // Fit against the narrower of vertical/horizontal FOV so comparison scenes do
+  // not clip in the narrow in-app browser. The gain leaves room for projected
+  // Gaussian ellipses, which extend beyond the point centers.
+  const vFov = THREE.MathUtils.degToRad(camera.fov);
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * Math.max(camera.aspect, 0.05));
+  const fitFov = Math.max(Math.min(vFov, hFov), 0.1);
+  const dist = Math.max((sphere.radius * 1.35) / Math.sin(fitFov / 2), sphere.radius * 3.5);
+  const viewDir = new THREE.Vector3(0.45, -0.28, 1.0).normalize();
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center).addScaledVector(viewDir, dist);
+  camera.near = dist * 0.001;
+  camera.far  = dist * 10;
+  camera.updateProjectionMatrix();
+  controls.minDistance = dist * 0.05;
+  controls.maxDistance = dist * 8;
+  controls.update();
+}
+
+function currentCameraRadius() {
+  const radius = camera.position.distanceTo(controls.target);
+  return THREE.MathUtils.clamp(radius, controls.minDistance || 1, controls.maxDistance || 10000);
+}
+
+function rotateCamera(deltaTheta, deltaPhi) {
+  const offset = camera.position.clone().sub(controls.target);
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta += deltaTheta;
+  spherical.phi = THREE.MathUtils.clamp(spherical.phi + deltaPhi, 0.05, Math.PI - 0.05);
+  offset.setFromSpherical(spherical);
+  camera.position.copy(controls.target).add(offset);
+  camera.lookAt(controls.target);
+  controls.update();
+  maybeDepthSortCurrentSplat(true);
+}
+
+function zoomCamera(factor) {
+  const offset = camera.position.clone().sub(controls.target);
+  const nextRadius = THREE.MathUtils.clamp(offset.length() * factor, controls.minDistance || 1, controls.maxDistance || 10000);
+  offset.setLength(nextRadius);
+  camera.position.copy(controls.target).add(offset);
+  camera.lookAt(controls.target);
+  controls.update();
+  maybeDepthSortCurrentSplat(true);
+}
+
+function setCameraPreset(direction) {
+  const radius = currentCameraRadius();
+  const dir = direction.clone().normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, radius);
+  camera.lookAt(controls.target);
+  controls.update();
+  maybeDepthSortCurrentSplat(true);
+}
+
+function resetCameraToCurrentSplat() {
+  if (!currentPoints) return;
+  const sphere = currentPoints.userData.boundingSphere
+    ? currentPoints.userData.boundingSphere.clone()
+    : new THREE.Box3().setFromObject(currentPoints).getBoundingSphere(new THREE.Sphere());
+  fitCameraToSphere(sphere);
+  maybeDepthSortCurrentSplat(true);
+}
+
+function handleRemoteCameraCommand(command) {
+  const step = 0.12;
+  if (command === "front") setCameraPreset(new THREE.Vector3(0, 0, 1));
+  else if (command === "left") setCameraPreset(new THREE.Vector3(-1, 0, 0));
+  else if (command === "top") setCameraPreset(new THREE.Vector3(0, -1, 0));
+  else if (command === "rotate-left") rotateCamera(-step, 0);
+  else if (command === "rotate-right") rotateCamera(step, 0);
+  else if (command === "rotate-up") rotateCamera(0, -step);
+  else if (command === "rotate-down") rotateCamera(0, step);
+  else if (command === "zoom-in") zoomCamera(0.88);
+  else if (command === "zoom-out") zoomCamera(1.12);
+  else if (command === "reset") resetCameraToCurrentSplat();
+}
+
+function wireCameraShortcuts() {
+  const step = 0.08;
+  const handleKey = (event) => {
+    const tag = event.target?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    const key = event.key.toLowerCase();
+    if (key === "w" || event.key === "ArrowUp") rotateCamera(0, -step);
+    else if (key === "s" || event.key === "ArrowDown") rotateCamera(0, step);
+    else if (key === "a" || event.key === "ArrowLeft") rotateCamera(-step, 0);
+    else if (key === "d" || event.key === "ArrowRight") rotateCamera(step, 0);
+    else if (key === "q") zoomCamera(1.12);
+    else if (key === "e") zoomCamera(0.88);
+    else return;
+    event.preventDefault();
+  };
+  window.addEventListener("keydown", handleKey);
+  document.addEventListener("keydown", handleKey);
+  renderer.domElement.setAttribute("tabindex", "0");
+  renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
+
+  document.getElementById("btn-view-front").addEventListener("click", () => setCameraPreset(new THREE.Vector3(0, 0, 1)));
+  document.getElementById("btn-view-left").addEventListener("click", () => setCameraPreset(new THREE.Vector3(-1, 0, 0)));
+  document.getElementById("btn-view-top").addEventListener("click", () => setCameraPreset(new THREE.Vector3(0, -1, 0)));
+  document.getElementById("btn-rotate-left").addEventListener("click", () => rotateCamera(-step, 0));
+  document.getElementById("btn-rotate-right").addEventListener("click", () => rotateCamera(step, 0));
+  document.getElementById("btn-rotate-up").addEventListener("click", () => rotateCamera(0, -step));
+  document.getElementById("btn-rotate-down").addEventListener("click", () => rotateCamera(0, step));
+  document.getElementById("btn-zoom-out").addEventListener("click", () => zoomCamera(1.12));
+  document.getElementById("btn-zoom-in").addEventListener("click", () => zoomCamera(0.88));
+}
+
+function collectSplatMeshes(obj) {
+  const meshes = [];
+  obj?.traverse?.((child) => {
+    if (child.isMesh && child.userData?.sourceSplatAttributes) {
+      meshes.push(child);
+    }
+  });
+  if (obj?.isMesh && obj.userData?.sourceSplatAttributes && !meshes.includes(obj)) {
+    meshes.push(obj);
+  }
+  return meshes;
+}
+
+function disposeSplatObject(obj) {
+  obj?.traverse?.((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  });
+}
+
+function replacePoints(pts) {
+  if (currentPoints) {
+    scene.remove(currentPoints);
+    disposeSplatObject(currentPoints);
+  }
+  scene.add(pts);
+  currentPoints = pts;
+  currentSplatMeshes = collectSplatMeshes(pts);
+  const sphere = pts.userData.boundingSphere
+    ? pts.userData.boundingSphere.clone()
+    : new THREE.Box3().setFromObject(pts).getBoundingSphere(new THREE.Sphere());
+  fitCameraToSphere(sphere);
+  maybeDepthSortCurrentSplat(true);
+}
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
+
+document.getElementById("btn-reload").addEventListener("click", async () => {
+  const subjectId = document.getElementById("sel-subject").value;
+  if (!subjectId) return;
+  try {
+    await loadSubject(subjectId);
+  } catch (e) {
+    status(`Error: ${e.message}`);
+    console.error(e);
+  }
+});
+
+function updateMaterial() {
+  const mode = document.getElementById("sel-color").value;
+  const renderMode = document.getElementById("sel-render").value;
+  for (const mesh of currentSplatMeshes) {
+    const mat = mesh.material;
+    if (!mat?.uniforms) continue;
+    mat.uniforms.uPointSize.value = parseFloat(document.getElementById("rng-size").value);
+    mat.uniforms.uOpacity.value   = parseFloat(document.getElementById("rng-opacity").value);
+    mat.uniforms.uColorMode.value = colorModeCode(mode);
+    mat.uniforms.uRenderMode.value = renderModeCode(renderMode);
+    mat.uniforms.uCoverageBoost.value = coverageBoostFromMeta(mesh.userData.sourceMeta ?? currentMeta);
+    if (mat.uniforms.uScaleBoost) {
+      mat.uniforms.uScaleBoost.value = scaleBoostFromMeta(mesh.userData.sourceMeta ?? currentMeta);
+    }
+    setMaterialBlending(mat, renderMode);
+  }
+}
+
+const sizeInput = document.getElementById("rng-size");
+if (sizeInput?.type !== "hidden") {
+  sizeInput.addEventListener("input", (e) => {
+    document.getElementById("val-size").textContent = parseFloat(e.target.value).toFixed(2);
+    updateMaterial();
+  });
+}
+document.getElementById("rng-opacity").addEventListener("input", (e) => {
+  document.getElementById("val-opacity").textContent = parseFloat(e.target.value).toFixed(2);
+  updateMaterial();
+});
+document.getElementById("sel-color").addEventListener("change", updateMaterial);
+document.getElementById("sel-render").addEventListener("change", updateMaterial);
+
+document.getElementById("sel-artifact").addEventListener("change", async () => {
+  const subjectId = document.getElementById("sel-subject").value;
+  if (!subjectId || !currentPoints) return;
+  try {
+    await loadSubject(subjectId);
+  } catch (e) {
+    status(`Error switching artifact: ${e.message}`);
+    console.error(e);
+  }
+});
+
+document.getElementById("btn-reset-cam").addEventListener("click", () => {
+  resetCameraToCurrentSplat();
+});
+
+document.getElementById("btn-niivue").addEventListener("click", () => {
+  const subjectId = document.getElementById("sel-subject").value;
+  if (!subjectId) return;
+  const params = new URLSearchParams(window.location.search);
+  const root = params.get("root");
+  let url = `/viewer/?subject=${subjectId}`;
+  if (root) url += `&root=${encodeURIComponent(root)}`;
+  window.open(url, "_blank");
+});
+
+wireCameraShortcuts();
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== "isu-brain-visualizer:splat-command") return;
+  handleRemoteCameraCommand(event.data.command);
+});
+
+// Auto-load from URL params
+(async () => {
+  await loadIndex();
+  const params = new URLSearchParams(window.location.search);
+  const req = params.get("subject") || params.get("demo");
+  if (req && req !== "1") {
+    document.getElementById("sel-subject").value = req;
+    try { await loadSubject(req); } catch (e) { status(`Auto-load failed: ${e.message}`); }
+  } else if (req === "1" && subjects.length > 0) {
+    const fcd = subjects.find(s => s.group === "fcd") || subjects[0];
+    document.getElementById("sel-subject").value = fcd.subject;
+    try { await loadSubject(fcd.subject); } catch (e) { status(`Auto-load failed: ${e.message}`); }
+  }
+})();
+</script>
+</body>
+</html>
