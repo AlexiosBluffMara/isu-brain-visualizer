@@ -40,6 +40,15 @@ Recommended sharing paths:
 2. Share the generated output folder through private object storage.
 3. Use release assets only for a compact demo bundle.
 
+To create split archive parts for private sharing:
+
+```bash
+bash scripts/package_viewer_data.sh outputs/end_to_end_fcd85_hd dist/viewer-data
+```
+
+This writes `.tar.gz.part-*` files plus a SHA-256 checksum file. The archive
+parts are generated under `dist/`, which is ignored by Git.
+
 ## Regenerate Browser Splats
 
 Run from the repository root:
