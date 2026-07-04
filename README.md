@@ -132,37 +132,6 @@ Verify the generated viewer data:
 python scripts/verify_viewer_dataset.py --root outputs/end_to_end_fcd85_hd
 ```
 
-## Docker
-
-Docker packages the project into a repeatable environment.
-
-Simple explanation:
-
-- The Docker image is the recipe.
-- The Docker container is the running copy of that recipe.
-- The large MRI data stays on your machine and is mounted into the container.
-
-Build:
-
-```bash
-docker build -t isu-brain-visualizer .
-```
-
-Run:
-
-```bash
-docker run --rm -p 8081:8080 \
-  -v "$PWD/outputs:/app/outputs" \
-  -v "$PWD/data:/app/data" \
-  isu-brain-visualizer
-```
-
-Open:
-
-```text
-http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=sync
-```
-
 ## Sharing The Full Project
 
 The private GitHub repository should contain:
@@ -170,7 +139,6 @@ The private GitHub repository should contain:
 - source code,
 - viewer code,
 - tests,
-- Dockerfile,
 - regeneration instructions,
 - dataset attribution.
 
@@ -201,7 +169,6 @@ viewer outputs.
 | `scripts/regenerate_browser_splats.py` | Regenerates responsive browser splats from MRI plus expert lesion mask. |
 | `scripts/verify_viewer_dataset.py` | Verifies that all viewer subjects have required artifacts. |
 | `src/fcd_prototype/ds004199_download.py` | OpenNeuro dataset download helper. |
-| `Dockerfile` | Container recipe for running the project reproducibly. |
 
 ## Validation
 
