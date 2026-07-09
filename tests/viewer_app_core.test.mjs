@@ -23,10 +23,22 @@ import {
 
 test("URL builders target the finished FCD85 dataset and lesion-highlighted splat", () => {
   assert.equal(manifestUrl({ subject: "sub-00058" }), `${DEFAULT_ROOT}/sub-00058/manifest.json`);
-  assert.equal(niivueUrl({ subject: "sub-00058" }), `/viewer/?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058`);
+  assert.equal(niivueUrl({ subject: "sub-00058" }), `/viewer/?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058&v=20260705-t1w-3d-mri`);
   assert.equal(
     splatUrl({ subject: "sub-00058" }),
     `/viewer/splat.html?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058&splat=lesion-highlighted`,
+  );
+  assert.equal(
+    niivueUrl({ subject: "sub-00058", embed: true, layout: "3-2d" }),
+    `/viewer/?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058&embed=1&layout=3-2d&v=20260705-t1w-3d-mri`,
+  );
+  assert.equal(
+    niivueUrl({ subject: "sub-00058", embed: true, layout: "4", base: "t1w" }),
+    `/viewer/?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058&embed=1&layout=4&base=t1w&v=20260705-t1w-3d-mri`,
+  );
+  assert.equal(
+    splatUrl({ subject: "sub-00058", embed: true, view: "left" }),
+    `/viewer/splat.html?root=%2Foutputs%2Fend_to_end_fcd85_hd&subject=sub-00058&splat=lesion-highlighted&embed=1&view=left`,
   );
   assert.equal(cleanRoot("/outputs/custom/"), "/outputs/custom");
   assert.equal(cleanRoot("   "), DEFAULT_ROOT);

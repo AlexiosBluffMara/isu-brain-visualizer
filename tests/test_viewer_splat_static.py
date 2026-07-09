@@ -62,3 +62,9 @@ def test_splat_viewer_exposes_visible_camera_controls():
     assert 'id="btn-view-front"' in html
     assert 'id="btn-view-left"' in html
     assert 'id="btn-view-top"' in html
+
+
+def test_splat_viewer_fetches_regenerated_ply_without_cache():
+    html = _viewer_html()
+
+    assert 'fetch(plyUrl, { cache: "no-store" })' in html

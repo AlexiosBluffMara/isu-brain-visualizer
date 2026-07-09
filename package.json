@@ -1,9 +1,11 @@
 {
   "type": "module",
   "scripts": {
-    "test": "npm run test:viewer && npm run test:python:coverage && npm run verify:viewer-data",
-    "test:viewer": "node --test tests/viewer_app_core.test.mjs",
-    "test:viewer:coverage": "node --experimental-test-coverage --test tests/viewer_app_core.test.mjs",
+    "test": "npm run test:js && npm run test:python:coverage && npm run verify:viewer-data",
+    "test:js": "node --test tests/*.test.mjs",
+    "test:js:coverage": "node --experimental-test-coverage --test tests/*.test.mjs",
+    "test:viewer": "npm run test:js",
+    "test:viewer:coverage": "npm run test:js:coverage",
     "test:viewer:static": ".venv/bin/python -m pytest tests/test_viewer_app_static.py tests/test_viewer_static.py tests/test_viewer_splat_static.py tests/test_viewer_splat_renderer.py tests/test_verify_viewer_dataset.py -q",
     "test:python:coverage": ".venv/bin/python -m pytest --cov=src/fcd_prototype --cov-report=term-missing:skip-covered --cov-fail-under=90 -q",
     "verify:viewer-data": ".venv/bin/python scripts/verify_viewer_dataset.py"

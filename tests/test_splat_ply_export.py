@@ -218,7 +218,7 @@ def test_gaussian_state_npz_matches_direct_ply_schema(tmp_path, vol_path):
         )
 
 
-def test_lesion_highlighted_export_adds_red_roi_gaussians(tmp_path, vol_path):
+def test_lesion_highlighted_export_adds_uniform_orange_roi_gaussians(tmp_path, vol_path):
     roi = tmp_path / "roi.nii.gz"
     img = nib.load(str(vol_path))
     roi_data = np.zeros(img.shape[:3], dtype=np.uint8)
@@ -238,17 +238,48 @@ def test_lesion_highlighted_export_adds_red_roi_gaussians(tmp_path, vol_path):
     arr = _read_ply_array(out)
 
     assert meta["lesion_highlight"] is True
+    assert meta["lesion_color_model"] == "uniform_orange_roi_gaussians"
+    assert meta["lesion_color_rgb"] == [255, 149, 0]
     assert meta["n_anatomy_points"] <= 300
     assert meta["n_lesion_points"] == int(roi_data.sum())
     assert len(arr) == meta["n_anatomy_points"] + meta["n_lesion_points"]
     lesion_arr = arr[-meta["n_lesion_points"]:]
     assert np.all(lesion_arr["red"] == 255)
-    assert np.all(lesion_arr["green"] >= 70)
+    assert np.all(lesion_arr["green"] == 149)
+    assert np.all(lesion_arr["blue"] == 0)
     assert np.all(lesion_arr["opacity"] > 0.9)
 
     with np.load(tmp_path / "lesion_highlighted_state.npz") as state:
         assert state["is_lesion"].sum() == meta["n_lesion_points"]
         assert str(state["source_roi"]) == str(roi)
+
+
+def test_lesion_highlighted_browser_scales_cap_thick_slice_spikes(tmp_path):
+    vol = tmp_path / "anisotropic.nii.gz"
+    roi = tmp_path / "anisotropic_roi.nii.gz"
+    affine = np.diag([0.7, 0.7, 5.2, 1.0])
+    _make_volume(vol, shape=(32, 32, 12), affine=affine)
+    roi_data = np.zeros((32, 32, 12), dtype=np.uint8)
+    roi_data[10:15, 10:15, 5:7] = 1
+    nib.save(nib.Nifti1Image(roi_data, affine), str(roi))
+
+    out = tmp_path / "lesion_highlighted.ply"
+    meta = export_lesion_highlighted_splat_ply(
+        vol,
+        roi,
+        out,
+        max_anatomy_points=500,
+        max_lesion_points=100,
+        rng_seed=11,
+        sampling_mode="volume",
+    )
+    arr = _read_ply_array(out)
+    scales = np.stack([arr["scale_x"], arr["scale_y"], arr["scale_z"]], axis=1)
+    median = np.median(scales, axis=1)
+
+    assert meta["browser_scale_anisotropy_cap_ratio"] == 1.6
+    assert "thick-slice spike artifacts" in meta["browser_scale_policy"]
+    assert np.all(scales.max(axis=1) <= median * 1.6001)
 
 
 def test_opacity_in_unit_range(tmp_path, vol_path):

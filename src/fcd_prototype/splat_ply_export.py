@@ -64,6 +64,7 @@ _VOLUME_PERCENTILE_FLOOR = 20.0
 _VOLUME_INTENSITY_FLOOR = 0.08
 _GAUSSIAN_STATE_SCHEMA = "mri_direct_splat_v1"
 _COORDINATE_FRAME_SCHEMA = "mri_direct_splat_coordinate_frame_v1"
+_LESION_SPLAT_ORANGE_RGB = np.array([255, 149, 0], dtype=np.uint8)
 
 
 def _load_canonical(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -583,6 +584,26 @@ def oriented_gaussian_parameters(
         meta["density_voxels_per_splat"] = density_voxels_per_splat
     return scales, quats, meta
 
+
+def _cap_browser_scale_anisotropy(
+    scales: np.ndarray,
+    *,
+    max_ratio_to_median: float = 1.6,
+) -> np.ndarray:
+    """Limit visual splat streaking from thick-slice MRI acquisitions.
+
+    Positions stay in the original millimeter coordinate frame. Only the
+    drawn Gaussian ellipsoid size is capped, so a 5 mm slice direction does
+    not become a long browser-visible spike.
+    """
+    if len(scales) == 0:
+        return scales.astype(np.float32)
+    safe = np.maximum(scales.astype(np.float32), 1e-6)
+    median = np.median(safe, axis=1, keepdims=True).astype(np.float32)
+    capped = np.minimum(safe, median * float(max_ratio_to_median))
+    return capped.astype(np.float32)
+
+
 def export_splat_ply(
     volume_path: Path,
     output_ply: Path,
@@ -826,7 +847,7 @@ def export_lesion_highlighted_splat_ply(
 
     This is the product-facing MRI 3DGS artifact: the anatomy is sampled from
     the input NIfTI, and the provided lesion mask is rendered as high-opacity
-    red/orange Gaussians in the same canonical RAS millimeter coordinate frame.
+    orange Gaussians in the same canonical RAS millimeter coordinate frame.
     """
     volume_path = Path(volume_path)
     roi_path = Path(roi_path)
@@ -847,12 +868,13 @@ def export_lesion_highlighted_splat_ply(
     with np.load(state_path) as state:
         anatomy_positions = state["positions_world"].astype(np.float32)
         anatomy_voxels = state["positions_voxel"].astype(np.float32)
-        anatomy_scales = state["scales"].astype(np.float32)
+        anatomy_scales_raw = state["scales"].astype(np.float32)
         anatomy_quats = state["rotations_quat"].astype(np.float32)
         anatomy_opacity = state["opacity"].astype(np.float32)
         anatomy_intensity = state["intensity"].astype(np.float32)
         anatomy_color = state["color_rgb"].astype(np.uint8)
         affine = state["affine"].astype(np.float64)
+    anatomy_scales = _cap_browser_scale_anisotropy(anatomy_scales_raw)
 
     volume_data, volume_affine = _load_canonical(volume_path)
     roi_data, roi_affine = _load_canonical(roi_path)
@@ -890,15 +912,13 @@ def export_lesion_highlighted_splat_ply(
             sampled_point_count=len(lesion_voxels),
         )
         lesion_scales = (lesion_scales * np.array([3.8, 3.8, 2.6], dtype=np.float32)).astype(np.float32)
+        lesion_scales = _cap_browser_scale_anisotropy(lesion_scales)
         ijk = np.round(lesion_voxels).astype(np.int64)
         for axis, size in enumerate(norm.shape[:3]):
             np.clip(ijk[:, axis], 0, size - 1, out=ijk[:, axis])
         lesion_intensity = norm[ijk[:, 0], ijk[:, 1], ijk[:, 2]].astype(np.float32)
         lesion_opacity = np.full(len(lesion_voxels), 1.0, dtype=np.float32)
-        lesion_color = np.zeros((len(lesion_voxels), 3), dtype=np.uint8)
-        lesion_color[:, 0] = 255
-        lesion_color[:, 1] = np.clip(70 + lesion_intensity * 120, 70, 190).astype(np.uint8)
-        lesion_color[:, 2] = np.clip(20 + lesion_intensity * 35, 20, 55).astype(np.uint8)
+        lesion_color = np.tile(_LESION_SPLAT_ORANGE_RGB, (len(lesion_voxels), 1))
     else:
         lesion_positions = np.zeros((0, 3), dtype=np.float32)
         lesion_scales = np.zeros((0, 3), dtype=np.float32)
@@ -980,10 +1000,16 @@ def export_lesion_highlighted_splat_ply(
         "n_lesion_points": int(len(lesion_positions)),
         "lesion_voxels_total": int((roi_data > 0).sum()),
         "lesion_highlight": True,
-        "lesion_color_model": "high_opacity_red_orange_roi_gaussians",
+        "lesion_color_model": "uniform_orange_roi_gaussians",
+        "lesion_color_rgb": _LESION_SPLAT_ORANGE_RGB.astype(int).tolist(),
         "anatomy_opacity_scale": 0.62,
         "lesion_opacity": 1.0,
         "lesion_scale_multiplier": [3.8, 3.8, 2.6],
+        "browser_scale_anisotropy_cap_ratio": 1.6,
+        "browser_scale_policy": (
+            "positions preserve canonical RAS millimeter MRI space; displayed "
+            "Gaussian ellipsoid radii are capped to avoid thick-slice spike artifacts"
+        ),
         "gaussian_state_npz": state_path.name,
     }
     lesion_meta.update({

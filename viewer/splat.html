@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ISU Brain Visualizer — 3D Lesion Splat</title>
+  <script>
+    if (new URLSearchParams(window.location.search).get("embed") === "1") {
+      document.documentElement.classList.add("embed");
+    }
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -61,15 +66,15 @@
       background: #101117; color: #f0f2f6; border: 1px solid #383a47;
       border-radius: 8px; padding: 0.25rem 0.45rem; font-size: 0.75rem;
     }
-    input[type="range"] { width: 90px; accent-color: #cc0000; cursor: pointer; }
+    input[type="range"] { width: 90px; accent-color: #ff9500; cursor: pointer; }
     .val { font-size: 0.72rem; min-width: 2.6rem; text-align: right; color: #cdd0d8; }
     button {
       min-height: 32px;
       padding: 0 0.65rem; font-size: 0.75rem; border-radius: 8px;
       border: 1px solid #383a47; background: #1c1e28; color: #f0f2f6; cursor: pointer;
     }
-    button:hover { border-color: #ee2d3f; }
-    button.act { border-color: #cc0000; background: #cc0000; color: #fff; }
+    button:hover { border-color: #ffb340; }
+    button.act { border-color: #ff9500; background: #ff9500; color: #111; }
     #canvas-wrap { flex: 1; min-height: 0; position: relative; }
     #three-canvas { display: block; width: 100%; height: 100%; }
     #compare-labels {
@@ -86,7 +91,18 @@
       display: flex; justify-content: space-between; overflow: hidden;
     }
     #status-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #proto-note { flex-shrink: 0; margin-left: 1rem; color: #a33; }
+    #proto-note { flex-shrink: 0; margin-left: 1rem; color: #ff9500; }
+    html.embed header,
+    html.embed #status-bar {
+      display: none;
+    }
+    html.embed #canvas-wrap {
+      height: 100vh;
+      flex: none;
+    }
+    html.embed #control-help {
+      display: none;
+    }
     #control-help {
       position: absolute;
       left: 0.75rem;
@@ -102,7 +118,7 @@
       line-height: 1.45;
       backdrop-filter: blur(8px);
     }
-    #control-help strong { display: block; color: #f6a917; margin-bottom: 0.25rem; }
+    #control-help strong { display: block; color: #ff9500; margin-bottom: 0.25rem; }
     #control-help .keys { color: #cdd0d8; margin-bottom: 0.55rem; }
     #control-help .preset-row,
     #control-help .nudge-grid {
@@ -179,20 +195,21 @@
   <div id="control-help">
     <strong>3D controls</strong>
     <div class="keys">
-      Mouse drag rotates freely. W/S and arrow up/down rotate vertically. A/D and arrow left/right rotate sideways. Q zooms out. E zooms in.
+      Mouse drag rotates freely inside the viewer. W/S and arrow up/down rotate vertically. A/D and arrow left/right rotate sideways. Q zooms out. E zooms in.
     </div>
     <div class="preset-row">
-      <button id="btn-view-front" type="button">Front</button>
-      <button id="btn-view-left" type="button">Left</button>
-      <button id="btn-view-top" type="button">Top</button>
+      <button id="btn-view-front" type="button" data-camera-command="front">Front</button>
+      <button id="btn-view-left" type="button" data-camera-command="left">Left</button>
+      <button id="btn-view-top" type="button" data-camera-command="top">Top</button>
+      <button id="btn-view-reset" type="button" data-camera-command="reset">Reset camera</button>
     </div>
     <div class="nudge-grid">
-      <button id="btn-rotate-left" type="button">Rotate left</button>
-      <button id="btn-rotate-right" type="button">Rotate right</button>
-      <button id="btn-rotate-up" type="button">Rotate up</button>
-      <button id="btn-rotate-down" type="button">Rotate down</button>
-      <button id="btn-zoom-out" type="button">Zoom out</button>
-      <button id="btn-zoom-in" type="button">Zoom in</button>
+      <button id="btn-rotate-left" type="button" data-camera-command="rotate-left">Rotate left</button>
+      <button id="btn-rotate-right" type="button" data-camera-command="rotate-right">Rotate right</button>
+      <button id="btn-rotate-up" type="button" data-camera-command="rotate-up">Rotate up</button>
+      <button id="btn-rotate-down" type="button" data-camera-command="rotate-down">Rotate down</button>
+      <button id="btn-zoom-out" type="button" data-camera-command="zoom-out">Zoom out</button>
+      <button id="btn-zoom-in" type="button" data-camera-command="zoom-in">Zoom in</button>
     </div>
   </div>
   <div id="compare-labels"></div>
@@ -419,7 +436,7 @@ function chooseAutoSplatArtifact(names) {
 
 async function fetchPlyMesh(root, subjectId, plyName, meta = null) {
   const plyUrl = `${root}/${subjectId}/${plyName}`;
-  const plyResp = await fetch(plyUrl);
+  const plyResp = await fetch(plyUrl, { cache: "no-store" });
   if (!plyResp.ok) throw new Error(`HTTP ${plyResp.status} fetching ${plyUrl}`);
   const plyBuf = await plyResp.arrayBuffer();
   return parsePlyToPoints(plyBuf, meta);
@@ -874,6 +891,7 @@ async function loadSubject(subjectId) {
 
   const pts = await fetchPlyMesh(root, subjectId, plyName, meta);
   replacePoints(pts);
+  applyInitialCameraViewFromUrl();
 
   const n = splatCountOf(pts);
   const grp = expandGroupLabel(manifest.group);
@@ -1254,6 +1272,7 @@ function resetCameraToCurrentSplat() {
 function handleRemoteCameraCommand(command) {
   const step = 0.12;
   if (command === "front") setCameraPreset(new THREE.Vector3(0, 0, 1));
+  else if (command === "right") setCameraPreset(new THREE.Vector3(1, 0, 0));
   else if (command === "left") setCameraPreset(new THREE.Vector3(-1, 0, 0));
   else if (command === "top") setCameraPreset(new THREE.Vector3(0, -1, 0));
   else if (command === "rotate-left") rotateCamera(-step, 0);
@@ -1263,6 +1282,18 @@ function handleRemoteCameraCommand(command) {
   else if (command === "zoom-in") zoomCamera(0.88);
   else if (command === "zoom-out") zoomCamera(1.12);
   else if (command === "reset") resetCameraToCurrentSplat();
+}
+
+function applyInitialCameraViewFromUrl() {
+  const view = new URLSearchParams(window.location.search).get("view");
+  if (!view) return;
+  if (["front", "left", "right", "top"].includes(view)) {
+    handleRemoteCameraCommand(view);
+  } else if (view === "zoom") {
+    handleRemoteCameraCommand("top");
+    zoomCamera(0.72);
+    zoomCamera(0.72);
+  }
 }
 
 function wireCameraShortcuts() {
@@ -1284,10 +1315,16 @@ function wireCameraShortcuts() {
   document.addEventListener("keydown", handleKey);
   renderer.domElement.setAttribute("tabindex", "0");
   renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
+  renderer.domElement.addEventListener("wheel", (event) => {
+    zoomCamera(event.deltaY < 0 ? 0.88 : 1.12);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, { capture: true, passive: false });
 
   document.getElementById("btn-view-front").addEventListener("click", () => setCameraPreset(new THREE.Vector3(0, 0, 1)));
   document.getElementById("btn-view-left").addEventListener("click", () => setCameraPreset(new THREE.Vector3(-1, 0, 0)));
   document.getElementById("btn-view-top").addEventListener("click", () => setCameraPreset(new THREE.Vector3(0, -1, 0)));
+  document.getElementById("btn-view-reset").addEventListener("click", () => resetCameraToCurrentSplat());
   document.getElementById("btn-rotate-left").addEventListener("click", () => rotateCamera(-step, 0));
   document.getElementById("btn-rotate-right").addEventListener("click", () => rotateCamera(step, 0));
   document.getElementById("btn-rotate-up").addEventListener("click", () => rotateCamera(0, -step));
@@ -1407,7 +1444,8 @@ wireCameraShortcuts();
 
 window.addEventListener("message", (event) => {
   if (event.origin !== window.location.origin) return;
-  if (event.data?.type !== "isu-brain-visualizer:splat-command") return;
+  const type = event.data?.type;
+  if (type !== "isu-brain-visualizer:splat-command" && type !== "isu-brain-visualizer:camera-command") return;
   handleRemoteCameraCommand(event.data.command);
 });
 

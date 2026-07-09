@@ -86,7 +86,13 @@ def test_opacity_has_tooltip():
 def test_layout_has_tooltip():
     html = _html()
     assert 'id="layout-select"' in html
-    assert 'Layout' in html
+    assert 'MRI View' in html
+    assert '3-plane MRI only' in html
+    assert '3-plane + 3D MRI view' in html
+    assert '3D render only' in html
+    assert "multiplanarShowRender" in html
+    assert "SHOW_RENDER.NEVER" in html
+    assert "applyMriViewLayout" in html
 
 
 def test_crosshair_reset_have_tooltips():

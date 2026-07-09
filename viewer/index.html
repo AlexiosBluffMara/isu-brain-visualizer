@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ISU FCD Viewer</title>
+  <script>
+    if (new URLSearchParams(window.location.search).get("embed") === "1") {
+      document.documentElement.classList.add("embed");
+    }
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -268,12 +273,61 @@
     }
     #status-msg { overflow: hidden; text-overflow: ellipsis; }
     #proto-note { flex-shrink: 0; margin-left: 1rem; color: #ff9b9b; }
+    html.embed body { background: #050708; }
+    html.embed header,
+    html.embed #meta-panel,
+    html.embed #status-bar,
+    html.embed #btn-meta-toggle {
+      display: none;
+    }
+    html.embed #control-help {
+      display: none;
+    }
+    html.embed #main-area {
+      flex: 1;
+      height: 100vh;
+      min-height: 0;
+    }
+    html.embed #canvas-wrap {
+      flex: none;
+      width: 100vw;
+      height: 100vh;
+    }
     .overlay-row {
       display: flex;
       align-items: center;
       gap: 0.28rem;
     }
     .overlay-row input[type="checkbox"] { accent-color: #e25353; cursor: pointer; }
+    #control-help {
+      position: absolute;
+      left: 0.75rem;
+      top: 0.75rem;
+      z-index: 9;
+      width: min(320px, calc(100vw - 1.5rem));
+      background: rgba(20, 21, 28, 0.88);
+      border: 1px solid #383a47;
+      border-radius: 8px;
+      padding: 0.7rem;
+      color: #ddd;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      backdrop-filter: blur(8px);
+    }
+    #control-help.hidden { display: none; }
+    #control-help strong {
+      display: block;
+      color: #f6a917;
+      margin-bottom: 0.25rem;
+    }
+    #control-help .keys { color: #cdd0d8; margin-bottom: 0.55rem; }
+    #control-help .preset-row,
+    #control-help .nudge-grid {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    #control-help .nudge-grid { margin-top: 0.45rem; }
     @media (max-width: 760px) {
       body { height: auto; min-height: 100vh; overflow: auto; }
       #main-area { flex-direction: column; min-height: 920px; }
@@ -322,6 +376,26 @@
     <canvas id="gl-canvas"></canvas>
     <button class="meta-toggle" id="btn-meta-toggle"
             title="Toggle the subject browser, color legend, and metadata panel on the right.">Info</button>
+    <div id="control-help" class="hidden">
+      <strong>3D controls</strong>
+      <div class="keys">
+        Mouse drag rotates freely inside the viewer. W/S and arrow up/down rotate vertically. A/D and arrow left/right rotate sideways. Q zooms out. E zooms in.
+      </div>
+      <div class="preset-row">
+        <button type="button" data-camera-command="front">Front</button>
+        <button type="button" data-camera-command="left">Left</button>
+        <button type="button" data-camera-command="top">Top</button>
+        <button type="button" data-camera-command="reset">Reset camera</button>
+      </div>
+      <div class="nudge-grid">
+        <button type="button" data-camera-command="rotate-left">Rotate left</button>
+        <button type="button" data-camera-command="rotate-right">Rotate right</button>
+        <button type="button" data-camera-command="rotate-up">Rotate up</button>
+        <button type="button" data-camera-command="rotate-down">Rotate down</button>
+        <button type="button" data-camera-command="zoom-out">Zoom out</button>
+        <button type="button" data-camera-command="zoom-in">Zoom in</button>
+      </div>
+    </div>
   </div>
 
   <!-- Side panel: subject browser + legend + metadata -->
@@ -357,13 +431,13 @@
           title="Drag to change expert lesion mask opacity: 0 = invisible, 1 = solid red" /> <span class="val" id="opacity-val">0.45</span></span>
       </div>
       <div class="control-row">
-        <span class="meta-key" title="How many anatomical slice planes to show at once.">Layout</span>
+        <span class="meta-key" title="How many MRI views to show at once.">MRI View</span>
         <span class="meta-val"><select id="layout-select"
-          title="Multi-planar = axial + sagittal + coronal side by side; Axial only = single top-down slice; Sag+Cor+Ax = three-panel; 3D render = surface/volume render.">
-          <option value="3">Multi-planar</option>
+          title="3-plane MRI only = axial, coronal, and sagittal slices. 3D render only = the skull-like MRI volume render without slice panels.">
+          <option value="3-2d">3-plane MRI only</option>
+          <option value="3-3d">3-plane + 3D MRI view</option>
           <option value="1">Axial only</option>
-          <option value="2">Sag+Cor+Ax</option>
-          <option value="4">3D render</option>
+          <option value="4">3D render only</option>
         </select></span>
       </div>
       <div class="button-row">
@@ -384,8 +458,8 @@
       </div>
 
       <div class="legend-item">
-        <div class="legend-swatch" style="background: linear-gradient(to right, #fa0, #f60, #e00);"></div>
-        <div class="legend-text"><strong>Orange / red &mdash; 3D Lesion Splat:</strong> the same expert lesion mask translated into browser-rendered 3D Gaussian splats.</div>
+        <div class="legend-swatch" style="background:#ff9500;"></div>
+        <div class="legend-text"><strong>Orange &mdash; 3D Lesion Splat:</strong> the same expert lesion mask translated into browser-rendered 3D Gaussian splats.</div>
       </div>
 
       <div class="legend-item">
@@ -411,12 +485,13 @@
 
 <!-- NiiVue: try modern ESM from jsDelivr; fall back to UMD if ESM unavailable -->
 <script type="module">
-  let Niivue, DRAG_MODE;
+  let Niivue, DRAG_MODE, SHOW_RENDER;
 
   try {
     const mod = await import("https://cdn.jsdelivr.net/npm/@niivue/niivue@0.47.0/dist/niivue.es.js");
     Niivue = mod.Niivue;
     DRAG_MODE = mod.DRAG_MODE;
+    SHOW_RENDER = mod.SHOW_RENDER;
   } catch (_) {
     await new Promise((resolve, reject) => {
       const s = document.createElement("script");
@@ -427,6 +502,7 @@
     });
     Niivue = window.niivue.Niivue;
     DRAG_MODE = window.niivue.DRAG_MODE;
+    SHOW_RENDER = window.niivue.SHOW_RENDER;
   }
 
   // ---------------------------------------------------------------------------
@@ -435,6 +511,17 @@
   let crosshairOn = true;
   let currentManifest = null;
 
+  let initialLayout = new URLSearchParams(window.location.search).get("layout");
+  if (initialLayout === "3") initialLayout = "3-3d";
+  if (["1", "2", "3-2d", "3-3d", "4"].includes(initialLayout)) {
+    document.getElementById("layout-select").value = initialLayout;
+  }
+
+  const initialBase = new URLSearchParams(window.location.search).get("base");
+  if (["flair", "t1w", "t2w"].includes(initialBase)) {
+    document.getElementById("base-select").value = initialBase;
+  }
+
   const nv = new Niivue({
     isColorbar: false,
     backColor: [0.06, 0.06, 0.08, 1],
@@ -442,17 +529,131 @@
     show3Dcrosshair: false,
     dragMode: DRAG_MODE ? DRAG_MODE.pan : 2,
     isResizeCanvas: true,
+    multiplanarShowRender: SHOW_RENDER ? SHOW_RENDER.NEVER : 0,
+    multiplanarEqualSize: true,
   });
   nv.attachToCanvas(document.getElementById("gl-canvas"));
+  const canvas = document.getElementById("gl-canvas");
+  canvas.setAttribute("tabindex", "0");
+
+  const DEFAULT_3D_CAMERA = {
+    azimuth: nv.scene?.renderAzimuth ?? 110,
+    elevation: nv.scene?.renderElevation ?? 10,
+    scale: nv.scene?.volScaleMultiplier ?? 1,
+  };
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
   const status = (msg) => { document.getElementById("status-msg").textContent = msg; };
 
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function is3dMriLayout() {
+    const requestedView = document.getElementById("layout-select").value;
+    return requestedView === "4" || requestedView === "3-3d";
+  }
+
+  function updateCameraHelpVisibility() {
+    document.getElementById("control-help").classList.toggle("hidden", !is3dMriLayout());
+  }
+
+  function drawMriScene() {
+    nv.drawScene && nv.drawScene();
+  }
+
+  function setMriCamera(azimuth, elevation, scale = nv.scene?.volScaleMultiplier ?? DEFAULT_3D_CAMERA.scale) {
+    if (!nv.scene) return;
+    const nextAzimuth = Number.isFinite(azimuth) ? azimuth : DEFAULT_3D_CAMERA.azimuth;
+    const nextElevation = Number.isFinite(elevation) ? clamp(elevation, -89, 89) : DEFAULT_3D_CAMERA.elevation;
+    if (typeof nv.setRenderAzimuthElevation === "function") {
+      nv.setRenderAzimuthElevation(nextAzimuth, nextElevation);
+    } else {
+      nv.scene.renderAzimuth = nextAzimuth;
+      nv.scene.renderElevation = nextElevation;
+    }
+    nv.scene.volScaleMultiplier = clamp(Number(scale) || DEFAULT_3D_CAMERA.scale, 0.5, 2);
+    drawMriScene();
+  }
+
+  function rotateMriCamera(deltaAzimuth, deltaElevation) {
+    if (!nv.scene) return;
+    setMriCamera(
+      (Number(nv.scene.renderAzimuth) || 0) + deltaAzimuth,
+      (Number(nv.scene.renderElevation) || 0) + deltaElevation,
+      Number(nv.scene.volScaleMultiplier) || DEFAULT_3D_CAMERA.scale,
+    );
+  }
+
+  function zoomMriCamera(factor) {
+    if (!nv.scene) return;
+    setMriCamera(
+      Number(nv.scene.renderAzimuth) || DEFAULT_3D_CAMERA.azimuth,
+      Number(nv.scene.renderElevation) || DEFAULT_3D_CAMERA.elevation,
+      (Number(nv.scene.volScaleMultiplier) || DEFAULT_3D_CAMERA.scale) * factor,
+    );
+  }
+
+  function resetMriCamera() {
+    setMriCamera(DEFAULT_3D_CAMERA.azimuth, DEFAULT_3D_CAMERA.elevation, DEFAULT_3D_CAMERA.scale);
+  }
+
+  function handleCameraCommand(command) {
+    const step = 8;
+    if (command === "front") setMriCamera(0, 0);
+    else if (command === "right") setMriCamera(90, 0);
+    else if (command === "left") setMriCamera(-90, 0);
+    else if (command === "top") setMriCamera(0, -89);
+    else if (command === "rotate-left") rotateMriCamera(-step, 0);
+    else if (command === "rotate-right") rotateMriCamera(step, 0);
+    else if (command === "rotate-up") rotateMriCamera(0, -step);
+    else if (command === "rotate-down") rotateMriCamera(0, step);
+    else if (command === "zoom-in") zoomMriCamera(1.12);
+    else if (command === "zoom-out") zoomMriCamera(0.88);
+    else if (command === "reset") resetMriCamera();
+  }
+
+  function cameraCommandFromKey(event) {
+    const key = event.key.toLowerCase();
+    if (key === "w" || event.key === "ArrowUp") return "rotate-up";
+    if (key === "s" || event.key === "ArrowDown") return "rotate-down";
+    if (key === "a" || event.key === "ArrowLeft") return "rotate-left";
+    if (key === "d" || event.key === "ArrowRight") return "rotate-right";
+    if (key === "q") return "zoom-out";
+    if (key === "e") return "zoom-in";
+    return null;
+  }
+
   function overlayOpacity() {
     return parseFloat(document.getElementById("opacity-slider").value);
   }
+
+  function applyMriViewLayout() {
+    const requestedView = document.getElementById("layout-select").value;
+    const renderAlways = SHOW_RENDER ? SHOW_RENDER.ALWAYS : 1;
+    const renderNever = SHOW_RENDER ? SHOW_RENDER.NEVER : 0;
+    const isThreePlaneWithRender = requestedView === "3-3d";
+
+    if (nv.opts) {
+      nv.opts.multiplanarShowRender = isThreePlaneWithRender ? renderAlways : renderNever;
+      nv.opts.multiplanarEqualSize = true;
+      // Backward-compatible flag for older NiiVue builds.
+      nv.opts.multiplanarForceRender = isThreePlaneWithRender;
+    }
+
+    const sliceType = requestedView === "4"
+      ? nv.sliceTypeRender
+      : requestedView.startsWith("3-")
+        ? 3
+        : parseInt(requestedView, 10);
+    if (nv.setSliceType) nv.setSliceType(sliceType);
+    else if (nv.opts) nv.opts.sliceType = sliceType;
+    nv.drawScene && nv.drawScene();
+    updateCameraHelpVisibility();
+  }
+
   async function safeLoad(fn) {
     try { await fn(); }
     catch (err) { status(`Error: ${err.message}`); console.error(err); }
@@ -737,7 +938,7 @@
     if (!baseName) throw new Error("Manifest has no patient_flair, patient_t2w, or patient_t1w artifact.");
 
     await nv.loadVolumes([
-      { url: base + baseName, colormap: "gray", cal_min: 0, cal_max: 1 },
+      { url: base + baseName, colormap: "gray" },
     ]);
 
     const sel = document.getElementById("base-select");
@@ -752,6 +953,7 @@
     const overlayLabel = loadedOverlays.length ? loadedOverlays.join(", ") : "none";
     status(`Loaded ${subj} (${grp}) - base: ${baseName}  |  overlays: ${overlayLabel}`);
 
+    applyMriViewLayout();
     renderMetaPanel(manifest);
   }
 
@@ -871,11 +1073,59 @@
     if (nv.volumes.length > 1) nv.drawScene();
   });
 
-  document.getElementById("layout-select").addEventListener("change", (e) => {
-    const v = parseInt(e.target.value, 10);
-    if (nv.setSliceType) nv.setSliceType(v === 4 ? nv.sliceTypeRender : v);
-    else if (nv.opts) nv.opts.sliceType = v;
-    nv.drawScene && nv.drawScene();
+  document.getElementById("layout-select").addEventListener("change", applyMriViewLayout);
+
+  for (const button of document.querySelectorAll("[data-camera-command]")) {
+    button.addEventListener("click", () => handleCameraCommand(button.dataset.cameraCommand));
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (!is3dMriLayout()) return;
+    const tag = event.target?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    const command = cameraCommandFromKey(event);
+    if (!command) return;
+    handleCameraCommand(command);
+    event.preventDefault();
+  });
+
+  let mriDrag = null;
+  canvas.addEventListener("pointerdown", (event) => {
+    if (!is3dMriLayout()) return;
+    canvas.focus();
+    mriDrag = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    canvas.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  canvas.addEventListener("pointermove", (event) => {
+    if (!mriDrag || mriDrag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - mriDrag.x;
+    const dy = event.clientY - mriDrag.y;
+    mriDrag = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    rotateMriCamera(dx * 0.35, dy * 0.35);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  const clearMriDrag = (event) => {
+    if (!mriDrag || mriDrag.pointerId !== event.pointerId) return;
+    mriDrag = null;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  canvas.addEventListener("pointerup", clearMriDrag, true);
+  canvas.addEventListener("pointercancel", clearMriDrag, true);
+  canvas.addEventListener("wheel", (event) => {
+    if (!is3dMriLayout()) return;
+    handleCameraCommand(event.deltaY < 0 ? "zoom-in" : "zoom-out");
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, { capture: true, passive: false });
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    if (event.data?.type !== "isu-brain-visualizer:camera-command") return;
+    handleCameraCommand(event.data.command);
   });
 
   document.getElementById("btn-crosshair").addEventListener("click", () => {

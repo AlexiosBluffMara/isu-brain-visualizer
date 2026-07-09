@@ -25,7 +25,7 @@ The current verified local output contains:
 subjects=85
 ok=85
 bad=0
-total_splat_points=7557985
+total_splat_points=7537985
 ```
 
 ## Why The Data Is Not In Git
@@ -57,8 +57,9 @@ Run from the repository root:
 python scripts/regenerate_browser_splats.py \
   --root outputs/end_to_end_fcd85_hd \
   --anatomy-points 85000 \
-  --lesion-points 35000 \
-  --percentile-threshold 10
+  --lesion-points 25000 \
+  --percentile-threshold 10 \
+  --rng-seed 42
 ```
 
 Verify:

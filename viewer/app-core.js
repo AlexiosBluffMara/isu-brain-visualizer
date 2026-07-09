@@ -6,9 +6,10 @@ const TERM_EXPLANATIONS = {
   MRI: "The original brain scan. Think of it as a stack of thin picture slices through the head.",
   FLAIR: "Fluid-Attenuated Inversion Recovery. This MRI setting suppresses normal fluid so some abnormal tissue can stand out more clearly.",
   "Expert Lesion Mask": "The red label that came with the OpenNeuro dataset. A human expert marked this as the known Focal Cortical Dysplasia lesion.",
-  "Lesion Splat": "The same expert lesion mask translated into 3D Gaussian splats, with the MRI anatomy shown lightly for context.",
-  "3DGS": "3D Gaussian Splatting. It draws a 3D object using many small soft blobs instead of a solid mesh.",
-  NiiVue: "The medical image viewer used here to show real NIfTI MRI slices and overlays.",
+  "Lesion Splat": "The orange 3D Gaussian Splat version of that same expert lesion mask, with the MRI anatomy shown lightly for context.",
+  "3D MRI View": "A direct 3D volume rendering of the NIfTI MRI voxels. It comes from the MRI itself, not from Gaussian splatting.",
+  "3DGS": "3D Gaussian Splatting. It draws a 3D object using many small soft blobs instead of a solid mesh. Here it is an alternate visualization, not the source MRI.",
+  NiiVue: "The medical image viewer used here to show real NIfTI MRI slices, overlays, and direct 3D volume rendering.",
   Black: "Empty space, masked background, or low MRI signal. Black does not mean lesion by itself.",
   "Focal Cortical Dysplasia": "A developmental difference in the brain cortex that can cause drug-resistant epilepsy.",
   "Balloon cells": "Large abnormal cells sometimes seen in Focal Cortical Dysplasia Type IIb tissue. They help pathologists tell Type IIb apart from Type IIa.",
@@ -55,10 +56,14 @@ function manifestUrl({ root = DEFAULT_ROOT, subject = DEFAULT_SUBJECT } = {}) {
   return `${cleanRoot(root)}/${normalizeSubjectId(subject)}/manifest.json`;
 }
 
-function niivueUrl({ root = DEFAULT_ROOT, subject = DEFAULT_SUBJECT } = {}) {
+function niivueUrl({ root = DEFAULT_ROOT, subject = DEFAULT_SUBJECT, embed = false, layout = "", base = "" } = {}) {
   const params = new URLSearchParams();
   params.set("root", cleanRoot(root));
   params.set("subject", normalizeSubjectId(subject));
+  if (embed) params.set("embed", "1");
+  if (["1", "2", "3", "3-2d", "3-3d", "4"].includes(String(layout))) params.set("layout", String(layout));
+  if (["flair", "t1w", "t2w"].includes(String(base))) params.set("base", String(base));
+  params.set("v", "20260705-t1w-3d-mri");
   return `/viewer/?${params.toString()}`;
 }
 
@@ -66,11 +71,15 @@ function splatUrl({
   root = DEFAULT_ROOT,
   subject = DEFAULT_SUBJECT,
   splat = DEFAULT_SPLAT,
+  embed = false,
+  view = "",
 } = {}) {
   const params = new URLSearchParams();
   params.set("root", cleanRoot(root));
   params.set("subject", normalizeSubjectId(subject));
   params.set("splat", splat || DEFAULT_SPLAT);
+  if (embed) params.set("embed", "1");
+  if (["front", "left", "right", "top", "zoom"].includes(String(view))) params.set("view", String(view));
   return `/viewer/splat.html?${params.toString()}`;
 }
 

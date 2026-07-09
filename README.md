@@ -3,10 +3,11 @@
 Educational MRI viewer for public Focal Cortical Dysplasia data.
 
 The project takes OpenNeuro MRI data with expert-marked FCD lesion masks and
-shows the same subject in two coordinated ways:
+shows the same subject in three coordinated ways:
 
-1. A medical MRI slice viewer powered by NiiVue.
-2. A browser 3D Gaussian splat viewer powered by Three.js.
+1. A 2D medical MRI slice viewer powered by NiiVue.
+2. A direct 3D MRI volume render powered by NiiVue, using the isotropic T1w anatomy scan when available.
+3. A browser 3D Gaussian splat viewer powered by Three.js.
 
 The red lesion highlight comes from the provided expert lesion mask in the
 dataset. It is not an algorithm guess.
@@ -19,30 +20,33 @@ is not a diagnostic medical device.
 The main page is:
 
 ```text
-http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=sync
+http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=mri2d
 ```
 
 It has three tabs:
 
 | Tab | What it does |
 | --- | --- |
-| MRI Viewer | Shows the real NIfTI MRI slices and the provided expert lesion mask. |
-| 3D Lesion Splat | Shows the same MRI anatomy as a 3D Gaussian splat with the expert lesion mask highlighted. |
-| Synced MRI + 3D | Shows both views for the same subject and provides remote controls for the 3D splat camera. |
+| 2D MRI Viewer | Shows the real NIfTI MRI as coronal, sagittal, and axial slice views with the provided expert lesion mask. |
+| 3D MRI View | Shows NiiVue's direct 3D volume render. It uses the isotropic T1w anatomy scan when available, while the expert lesion mask remains the dataset-provided FLAIR-space mask placed by MRI coordinates. |
+| 3D Gaussian Splat View | Shows a converted 3D Gaussian splat representation. This is an alternate teaching visualization, not a replacement for the source MRI. |
 
-The right panel shows:
+The left panel shows:
 
+- selected subject,
+- dataset,
+- acquisition and scanner metadata,
 - lesion subtype,
 - lesion volume,
 - lesion voxel count,
 - lesion center,
 - lesion bounds,
 - lesion data source,
-- similar comparison subjects,
-- plain-language definitions.
+- 3D Gaussian splat point count and source,
+- similar MRI examples.
 
-The left panel lets users browse all FCD lesion subjects and group them by
-histopathology subtype.
+The right panel shows the current view explanation, color legend, and
+plain-language definitions.
 
 ## Dataset
 
@@ -70,7 +74,7 @@ Current verified viewer data:
 subjects=85
 ok=85
 bad=0
-total_splat_points=7557985
+total_splat_points=7537985
 ```
 
 The generated local output is about 15-16 GiB. It is not committed into Git.
@@ -95,6 +99,18 @@ Run tests:
 npm test
 ```
 
+Run only the browser JavaScript tests:
+
+```bash
+npm run test:js
+```
+
+Run JavaScript tests with Node's built-in coverage report:
+
+```bash
+npm run test:js:coverage
+```
+
 Start the viewer:
 
 ```bash
@@ -104,7 +120,7 @@ python -m http.server 8081
 Open:
 
 ```text
-http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=sync
+http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=mri2d
 ```
 
 ## Regenerate Browser Splats
@@ -122,8 +138,9 @@ Regenerate all 85 FCD browser splats:
 python scripts/regenerate_browser_splats.py \
   --root outputs/end_to_end_fcd85_hd \
   --anatomy-points 85000 \
-  --lesion-points 35000 \
-  --percentile-threshold 10
+  --lesion-points 25000 \
+  --percentile-threshold 10 \
+  --rng-seed 42
 ```
 
 Verify the generated viewer data:
@@ -181,9 +198,10 @@ npm test
 Current expected result:
 
 ```text
-688 passed
+13 JavaScript tests passed
+689 Python tests passed
 subjects=85
 ok=85
 bad=0
-total_splat_points=7557985
+total_splat_points=7537985
 ```
