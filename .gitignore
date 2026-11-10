@@ -18,6 +18,10 @@ data/openneuro/ds004199/
 # Outputs - generated volumes, heatmaps, PNGs; regenerable locally
 # Allow index.json and manifest.json to be committed for viewer bootstrap
 outputs/
+output/
+tmp/
+node_modules/
+.firecrawl/
 !outputs/.gitkeep
 !outputs/end_to_end/index.json
 !outputs/end_to_end/*/manifest.json
@@ -77,6 +81,7 @@ ENV/
 .ruff_cache/
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 *.log
 

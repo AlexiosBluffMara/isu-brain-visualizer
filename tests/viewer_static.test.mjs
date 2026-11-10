@@ -51,6 +51,22 @@ test("main app keeps dataset, subtype grouping, and teaching export visible", ()
   assert.match(html, /Plain-language definitions/);
 });
 
+test("main app exposes quiz and reveal lesion answer modes", () => {
+  const html = readProjectFile("viewer/app.html");
+  const appJs = readProjectFile("viewer/app.js");
+  const coreJs = readProjectFile("viewer/app-core.js");
+
+  assert.match(html, /data-lesion-visibility="hidden"/);
+  assert.match(html, /data-lesion-visibility="shown"/);
+  assert.match(html, /id="quiz-state-label"/);
+  assert.match(appJs, /lesionVisibility/);
+  assert.match(appJs, /Hidden for quiz/);
+  assert.match(appJs, /Quiz mode: expert lesion hidden/);
+  assert.match(appJs, /Answer mode: expert lesion shown/);
+  assert.match(coreJs, /function normalizeLesionVisibility/);
+  assert.match(coreJs, /params\.set\("lesion", normalizeLesionVisibility\(lesion\)\)/);
+});
+
 test("main app displays the active MRI source modality under the view title", () => {
   const html = readProjectFile("viewer/app.html");
   const appJs = readProjectFile("viewer/app.js");
@@ -115,6 +131,20 @@ test("standalone MRI and splat viewers keep red for lesion ROI and orange for 3D
   assert.doesNotMatch(niivue, /linear-gradient\(to right, #fa0, #f60, #e00\)/);
   assert.match(splat, /accent-color: #ff9500/);
   assert.match(splat, /button\.act \{ border-color: #ff9500; background: #ff9500/);
+});
+
+test("standalone MRI and splat viewers obey lesion hidden query mode", () => {
+  const niivue = readProjectFile("viewer/index.html");
+  const splat = readProjectFile("viewer/splat.html");
+
+  assert.match(niivue, /initialLesionVisibility/);
+  assert.match(niivue, /document\.getElementById\("chk-roi"\)\.checked = false/);
+  assert.match(niivue, /function lesionVisibilityParam/);
+  assert.match(niivue, /params\.set\("lesion", lesionVisibilityParam\(\)\)/);
+  assert.match(splat, /data-lesion-visibility="hidden"/);
+  assert.match(splat, /function lesionPointRange/);
+  assert.match(splat, /source\.opacities\.fill\(0, range\.start, range\.end\)/);
+  assert.match(splat, /originalOpacities/);
 });
 
 test("MRI viewer separates 2D slice layout from the NiiVue 3D render panel", () => {

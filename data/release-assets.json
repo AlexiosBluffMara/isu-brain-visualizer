@@ -1,0 +1,176 @@
+{
+  "version": "0.2.0",
+  "dataset": "OpenNeuro ds004199 v1.0.6",
+  "data_license": "CC0",
+  "release_base_url": "https://github.com/AlexiosBluffMara/isu-brain-visualizer/releases/download/v0.2.0/",
+  "full_case_count": 85,
+  "assets": [
+    {
+      "kind": "demo",
+      "name": "isu-brain-demo-v0.2.0.zip",
+      "subjects": [
+        "sub-00058",
+        "sub-00100"
+      ],
+      "bytes": 59302831,
+      "sha256": "a1cb3f70abd011e908bdc44f75773bbd6cf96a25ec2aee2badf5e6238439df79"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-01-v0.2.0.zip",
+      "subjects": [
+        "sub-00001",
+        "sub-00003",
+        "sub-00004",
+        "sub-00006",
+        "sub-00009",
+        "sub-00010",
+        "sub-00014",
+        "sub-00015",
+        "sub-00016",
+        "sub-00018"
+      ],
+      "bytes": 302444453,
+      "sha256": "e536b0536da4cda1a4f44bf0c09bd351d04ca2f30c42670ebc2b9f54888a6a0a"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-02-v0.2.0.zip",
+      "subjects": [
+        "sub-00020",
+        "sub-00024",
+        "sub-00027",
+        "sub-00032",
+        "sub-00033",
+        "sub-00034",
+        "sub-00038",
+        "sub-00040",
+        "sub-00043",
+        "sub-00044"
+      ],
+      "bytes": 276238009,
+      "sha256": "3acf2aa28b3136637fc728bbab501b1d365d60938529f9dfa29f67f59c4ba7d1"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-03-v0.2.0.zip",
+      "subjects": [
+        "sub-00047",
+        "sub-00048",
+        "sub-00050",
+        "sub-00053",
+        "sub-00055",
+        "sub-00058",
+        "sub-00059",
+        "sub-00060",
+        "sub-00061",
+        "sub-00062"
+      ],
+      "bytes": 277888650,
+      "sha256": "6e292c6aee68ac404d293b82d6f73804243c1a0490fac99a41798a1a00c72296"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-04-v0.2.0.zip",
+      "subjects": [
+        "sub-00063",
+        "sub-00064",
+        "sub-00065",
+        "sub-00066",
+        "sub-00068",
+        "sub-00071",
+        "sub-00072",
+        "sub-00073",
+        "sub-00074",
+        "sub-00076"
+      ],
+      "bytes": 277459792,
+      "sha256": "8ed1e1c6455fa3b8e3df185e80dffb23d8eb1cb5c99c4089e648d669eb6531eb"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-05-v0.2.0.zip",
+      "subjects": [
+        "sub-00077",
+        "sub-00078",
+        "sub-00080",
+        "sub-00081",
+        "sub-00083",
+        "sub-00087",
+        "sub-00089",
+        "sub-00090",
+        "sub-00091",
+        "sub-00092"
+      ],
+      "bytes": 303180074,
+      "sha256": "b6519956b24420ec25420690489aea92f1f1bdb57381096be61494ffbcc98c31"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-06-v0.2.0.zip",
+      "subjects": [
+        "sub-00095",
+        "sub-00097",
+        "sub-00098",
+        "sub-00099",
+        "sub-00100",
+        "sub-00101",
+        "sub-00103",
+        "sub-00105",
+        "sub-00107",
+        "sub-00108"
+      ],
+      "bytes": 314488639,
+      "sha256": "e2f5ae6c6b6a667ccfdfb421805549e16677c1c9b6745e85ed55b332bcf232c6"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-07-v0.2.0.zip",
+      "subjects": [
+        "sub-00109",
+        "sub-00112",
+        "sub-00115",
+        "sub-00116",
+        "sub-00120",
+        "sub-00121",
+        "sub-00122",
+        "sub-00123",
+        "sub-00125",
+        "sub-00126"
+      ],
+      "bytes": 265199819,
+      "sha256": "5a134cdc72e8f4693154ad3b8ce145bf9f75d1a86081d856d145597760434b1b"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-08-v0.2.0.zip",
+      "subjects": [
+        "sub-00128",
+        "sub-00130",
+        "sub-00131",
+        "sub-00132",
+        "sub-00133",
+        "sub-00134",
+        "sub-00136",
+        "sub-00138",
+        "sub-00139",
+        "sub-00140"
+      ],
+      "bytes": 278759889,
+      "sha256": "b2aa4525ca0ae76aacbf17b9db028e8e1c1e2023f2d493acf3ed877ab42c29cc"
+    },
+    {
+      "kind": "full",
+      "name": "isu-brain-cases-09-v0.2.0.zip",
+      "subjects": [
+        "sub-00141",
+        "sub-00142",
+        "sub-00144",
+        "sub-00145",
+        "sub-00146"
+      ],
+      "bytes": 170168560,
+      "sha256": "6a0e413d2bd953bd3c18d0f0f5326d2fa81e714085862007ca49d943e6cba867"
+    }
+  ]
+}

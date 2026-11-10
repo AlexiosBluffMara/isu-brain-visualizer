@@ -38,6 +38,18 @@ def test_splat_loader_forces_lesion_artifact_even_when_old_urls_are_used():
     assert 'artifactPref === "lesion-highlighted"' in viewer
 
 
+def test_splat_viewer_can_hide_lesion_points_for_quiz_mode():
+    viewer = Path("viewer/splat.html").read_text(encoding="utf-8")
+    assert 'data-lesion-visibility="hidden"' in viewer
+    assert 'data-lesion-visibility="shown"' in viewer
+    assert "function lesionPointRange" in viewer
+    assert "meta.n_lesion_points" in viewer
+    assert "source.opacities.fill(0, range.start, range.end)" in viewer
+    assert "if (vOpacity <= 0.0) discard;" in viewer
+    assert "originalOpacities" in viewer
+    assert "lesion hidden for quiz" in viewer
+
+
 def test_splat_viewer_keeps_only_lesion_view_as_product_handoff():
     viewer = Path("viewer/splat.html").read_text(encoding="utf-8")
     assert 'id="sel-artifact"' in viewer
@@ -86,6 +98,16 @@ def test_niivue_viewer_loads_only_expert_lesion_mask_overlay():
     assert 'key: "lesion_roi"' in viewer
     assert 'residual_candidate_mask' not in viewer
     assert 'lesion_heatmap' not in viewer
+
+
+def test_niivue_viewer_can_start_with_expert_mask_hidden_for_quiz():
+    viewer = Path("viewer/index.html").read_text(encoding="utf-8")
+    assert "initialLesionVisibility" in viewer
+    assert 'get("lesion")' in viewer
+    assert 'document.getElementById("chk-roi").checked = false;' in viewer
+    assert "function lesionAnswerHidden" in viewer
+    assert "Hidden for quiz" in viewer
+    assert 'params.set("lesion", lesionVisibilityParam());' in viewer
 
 
 def test_niivue_viewer_does_not_expose_residual_overlay():

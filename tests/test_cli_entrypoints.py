@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 def test_ds004199_download_main_wires_arguments(monkeypatch, tmp_path):
@@ -661,7 +662,7 @@ def test_real_preview_main_uses_discovered_subject_when_paths_omitted(monkeypatc
 
 
 def test_monai_ingest_main_saves_plain_tensors(monkeypatch, tmp_path, capsys):
-    import torch
+    torch = pytest.importorskip("torch")
     from fcd_prototype import monai_ingest as mod
 
     class FakeLoader:
@@ -694,7 +695,7 @@ def test_monai_ingest_main_saves_plain_tensors(monkeypatch, tmp_path, capsys):
 
 
 def test_monai_ingest_main_warns_when_save_fails(monkeypatch, tmp_path, capsys):
-    import torch
+    torch = pytest.importorskip("torch")
     from fcd_prototype import monai_ingest as mod
 
     class FakeLoader:

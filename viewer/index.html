@@ -522,6 +522,11 @@
     document.getElementById("base-select").value = initialBase;
   }
 
+  const initialLesionVisibility = new URLSearchParams(window.location.search).get("lesion");
+  if (initialLesionVisibility === "hidden") {
+    document.getElementById("chk-roi").checked = false;
+  }
+
   const nv = new Niivue({
     isColorbar: false,
     backColor: [0.06, 0.06, 0.08, 1],
@@ -628,6 +633,14 @@
 
   function overlayOpacity() {
     return parseFloat(document.getElementById("opacity-slider").value);
+  }
+
+  function lesionAnswerHidden() {
+    return !document.getElementById("chk-roi")?.checked;
+  }
+
+  function lesionVisibilityParam() {
+    return lesionAnswerHidden() ? "hidden" : "shown";
   }
 
   function applyMriViewLayout() {
@@ -860,7 +873,7 @@
     ];
     html += _section("Geometry", geoRows);
 
-    if (roi && !roi.error) {
+    if (roi && !roi.error && !lesionAnswerHidden()) {
       const center = Array.isArray(roi.center_ijk)
         ? roi.center_ijk.map(v => v.toFixed(0)).join(", ")
         : null;
@@ -883,19 +896,34 @@
              "Last voxel corner of the expert lesion mask box."),
       ];
       html += _section("Lesion ROI", roiRows);
+    } else if (lesionAnswerHidden()) {
+      html += _section("Lesion ROI", [
+        _row("Answer", "Hidden for quiz",
+             "Reveal the expert lesion mask to show the ROI measurements."),
+      ]);
     }
 
-    const splatRows = [
-      _row("Displayed splat points",
-           splatMeta.n_points || splatProfile.total_points,
-           "Point count in the browser-ready 3D lesion splat currently used by this product shell."),
-      _row("Anatomy points", splatProfile.anatomy_points || splatMeta.n_anatomy_points,
-           "Points sampled from the patient's MRI foreground anatomy."),
-      _row("Lesion points", splatProfile.lesion_points || splatMeta.n_lesion_points,
-           "Points sampled from the provided expert lesion mask only."),
-      _row("Lesion source", splatProfile.source_truth_for_lesion || splatMeta.source_truth_for_lesion,
-           "Confirms whether the red lesion highlight comes from the dataset label or from our own algorithm."),
-    ];
+    const splatRows = lesionAnswerHidden()
+      ? [
+          _row("Displayed splat points",
+               splatProfile.anatomy_points || splatMeta.n_anatomy_points,
+               "Anatomy point count shown while the lesion answer is hidden."),
+          _row("Lesion points", "Hidden for quiz",
+               "Reveal the answer to show the expert lesion splat details."),
+          _row("Lesion source", "Hidden for quiz",
+               "Reveal the answer to show the lesion source."),
+        ]
+      : [
+          _row("Displayed splat points",
+               splatMeta.n_points || splatProfile.total_points,
+               "Point count in the browser-ready 3D lesion splat currently used by this product shell."),
+          _row("Anatomy points", splatProfile.anatomy_points || splatMeta.n_anatomy_points,
+               "Points sampled from the patient's MRI foreground anatomy."),
+          _row("Lesion points", splatProfile.lesion_points || splatMeta.n_lesion_points,
+               "Points sampled from the provided expert lesion mask only."),
+          _row("Lesion source", splatProfile.source_truth_for_lesion || splatMeta.source_truth_for_lesion,
+               "Confirms whether the red lesion highlight comes from the dataset label or from our own algorithm."),
+        ];
     html += _section("3D Splat Source", splatRows);
 
     if (!html) {
@@ -1005,6 +1033,7 @@
     if (rootName) params.set("root", `/outputs/${rootName}`);
     if (subj) params.set("subject", subj);
     params.set("splat", chooseSplatViewArtifact(arts));
+    params.set("lesion", lesionVisibilityParam());
     const query = params.toString();
     return `/viewer/splat.html${query ? "?" + query : ""}`;
   }

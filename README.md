@@ -1,207 +1,127 @@
-# ISU Brain Visualizer
+# ISU Cortex · Brain Visualizer
 
-Educational MRI viewer for public Focal Cortical Dysplasia data.
+An educational viewer that shows the same expert-labeled brain MRI case in
+**2D MRI, 3D MRI, and an interactive 3D Gaussian splat**.
 
-The project takes OpenNeuro MRI data with expert-marked FCD lesion masks and
-shows the same subject in three coordinated ways:
+![Brain viewer with larger side-panel text](docs/images/viewer-large-text.png)
 
-1. A 2D medical MRI slice viewer powered by NiiVue.
-2. A direct 3D MRI volume render powered by NiiVue, using the isotropic T1w anatomy scan when available.
-3. A browser 3D Gaussian splat viewer powered by Three.js.
+The red MRI overlay and orange splat come from the dataset's **expert lesion
+mask**. This viewer displays known labels; it does not discover or diagnose a
+lesion. The Python research experiments remain in the repository, but they do
+not supply the teaching viewer's lesion answer.
 
-The red lesion highlight comes from the provided expert lesion mask in the
-dataset. It is not an algorithm guess.
+## Start with two ready-made cases
 
-This is for education, research communication, and prototype visualization. It
-is not a diagnostic medical device.
+Install **Python 3.11 or newer** and download this repository with GitHub's green
+**Code → Download ZIP** button. Extract the ZIP, open a terminal in the extracted
+folder, and run:
 
-## What The Viewer Shows
+**Windows (PowerShell):**
 
-The main page is:
-
-```text
-http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=mri2d
+```powershell
+py -3 scripts/run_viewer.py --download-demo
 ```
 
-It has three tabs:
-
-| Tab | What it does |
-| --- | --- |
-| 2D MRI Viewer | Shows the real NIfTI MRI as coronal, sagittal, and axial slice views with the provided expert lesion mask. |
-| 3D MRI View | Shows NiiVue's direct 3D volume render. It uses the isotropic T1w anatomy scan when available, while the expert lesion mask remains the dataset-provided FLAIR-space mask placed by MRI coordinates. |
-| 3D Gaussian Splat View | Shows a converted 3D Gaussian splat representation. This is an alternate teaching visualization, not a replacement for the source MRI. |
-
-The left panel shows:
-
-- selected subject,
-- dataset,
-- acquisition and scanner metadata,
-- lesion subtype,
-- lesion volume,
-- lesion voxel count,
-- lesion center,
-- lesion bounds,
-- lesion data source,
-- 3D Gaussian splat point count and source,
-- similar MRI examples.
-
-The right panel shows the current view explanation, color legend, and
-plain-language definitions.
-
-## Dataset
-
-The project uses OpenNeuro dataset `ds004199`.
-
-> Schuch F et al. "An open presurgery MRI dataset of people with epilepsy and
-> focal cortical dysplasia type II". Scientific Data 10, 475 (2023).
-> DOI: https://doi.org/10.1038/s41597-023-02386-7
-> OpenNeuro: https://openneuro.org/datasets/ds004199
-
-The dataset contains public, de-identified MRI data, healthy controls, FCD
-subjects, clinical metadata, and expert lesion masks.
-
-## Current Local Data Shape
-
-The current local viewer output folder is:
-
-```text
-outputs/end_to_end_fcd85_hd
-```
-
-Current verified viewer data:
-
-```text
-subjects=85
-ok=85
-bad=0
-total_splat_points=7537985
-```
-
-The generated local output is about 15-16 GiB. It is not committed into Git.
-Git should hold the source code and regeneration instructions. Large generated
-MRI outputs should be regenerated locally or shared through object storage.
-
-## Install Locally
-
-These commands assume Linux or WSL Ubuntu.
+**Mac or Linux (Terminal):**
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
+python3 scripts/run_viewer.py --download-demo
+```
+
+The command downloads and checks a **two-case demo (about 57 MiB)**, then opens
+the viewer. No Python packages, Node.js, CUDA, or NVIDIA GPU are needed for
+viewing. A current WebGL-capable browser and internet access are required;
+NiiVue and Three.js load from pinned public CDN URLs.
+
+Keep the terminal open while viewing. Press **Ctrl+C** there to stop.
+
+[Full step-by-step instructions, with troubleshooting](docs/running-the-project.md)
+
+## View all 85 FCD cases
+
+Use the same command with `--download-all`:
+
+```powershell
+py -3 scripts/run_viewer.py --download-all
+```
+
+On Mac/Linux, replace `py -3` with `python3`. The command downloads nine
+independent packs, checks their SHA-256 fingerprints, combines the case list,
+and opens the viewer. It skips packs already installed, so a stopped download
+can be restarted. Allow **6 GiB of free space** for downloading and unpacking.
+
+The two-case demo can be expanded to the full set without deleting it.
+All 85 viewer cases are hosted separately from the small code repository:
+
+- [Release downloads: demo, all case packs, and checksums](https://github.com/AlexiosBluffMara/isu-brain-visualizer/releases/tag/v0.2.0)
+- [Case catalog: all 85 subjects and their pack names](data/cases.csv)
+- [Data source, manual downloads, and regeneration](docs/data-and-regeneration.md)
+
+## Use the viewer
+
+1. Choose a case in the left panel. Scroll that panel to reach more metadata and cases.
+2. Choose **2D MRI Viewer**, **3D MRI View**, or **3D Gaussian Splat View**.
+3. Choose **Quiz Mode** to hide the expert lesion, or **Reveal Lesion** to show it.
+4. Rotate the 3D brain and use the camera controls to inspect it.
+5. Read the explanation and color key in the right panel. Both side panels use
+   twice the earlier text size for clearer large screenshots.
+6. Use either panel's **Hide** button to give the brain more room.
+
+The 2D view uses FLAIR when available. The 3D MRI view prefers T1w anatomy.
+The expert FLAIR-space mask is placed using its MRI coordinates.
+The splat is an MRI-derived teaching representation, rather than a trained
+photographic radiance-field reconstruction.
+
+## Data and attribution
+
+Source: [OpenNeuro ds004199, version 1.0.6](https://openneuro.org/datasets/ds004199/versions/1.0.6).
+The dataset's published description lists **CC0**.
+
+Schuch F et al. “An open presurgery MRI dataset of people with epilepsy and
+focal cortical dysplasia type II.” *Scientific Data* 10, 475 (2023).
+[Paper](https://doi.org/10.1038/s41597-023-02386-7) ·
+[Dataset DOI](https://doi.org/10.18112/openneuro.ds004199.v1.0.6)
+
+The source cohort contains 85 FCD participants and 85 healthy controls. The
+ready-made viewer packages cover the **85 FCD cases**. Instructions for obtaining
+the entire source cohort, including controls, are in the data guide.
+
+## Develop and test
+
+Viewing the prepared data does not need this setup. Developers can create a
+virtual environment, activate it, and install the Python package:
+
+```bash
+python -m venv .venv
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Mac/Linux: source .venv/bin/activate
 python -m pip install -e ".[dev]"
-npm install
+python -m pytest -q
 ```
 
-Run tests:
+JavaScript tests use Node.js 22 or newer and have no npm dependencies:
 
 ```bash
-npm test
+node --test tests/*.test.mjs
 ```
 
-Run only the browser JavaScript tests:
+After activating the Python environment, `npm test` runs both suites.
+`npm run verify:viewer-data` separately checks installed viewer data.
+The CI workflow checks source tests on Windows, Mac, and Linux; optional
+GPU research tests require their separate dependencies.
 
-```bash
-npm run test:js
-```
+## Project map
 
-Run JavaScript tests with Node's built-in coverage report:
-
-```bash
-npm run test:js:coverage
-```
-
-Start the viewer:
-
-```bash
-python -m http.server 8081
-```
-
-Open:
-
-```text
-http://127.0.0.1:8081/viewer/app.html?subject=sub-00058&mode=mri2d
-```
-
-## Regenerate Browser Splats
-
-The browser splats are made from two source-data pieces:
-
-1. the subject MRI foreground anatomy,
-2. the provided expert lesion mask.
-
-They do not use residuals, heatmaps, or candidate-region guesses.
-
-Regenerate all 85 FCD browser splats:
-
-```bash
-python scripts/regenerate_browser_splats.py \
-  --root outputs/end_to_end_fcd85_hd \
-  --anatomy-points 85000 \
-  --lesion-points 25000 \
-  --percentile-threshold 10 \
-  --rng-seed 42
-```
-
-Verify the generated viewer data:
-
-```bash
-python scripts/verify_viewer_dataset.py --root outputs/end_to_end_fcd85_hd
-```
-
-## Sharing The Full Project
-
-The private GitHub repository should contain:
-
-- source code,
-- viewer code,
-- tests,
-- regeneration instructions,
-- dataset attribution.
-
-The private GitHub repository should not contain:
-
-- generated 15-16 GiB MRI output folders,
-- local virtual environments,
-- credentials,
-- API keys,
-- cloud tokens.
-
-Recommended data-sharing options:
-
-1. Regenerate locally from OpenNeuro using the commands above.
-2. Share `outputs/end_to_end_fcd85_hd` through private object storage.
-3. Publish a split archive as release assets if a compact demo bundle is needed.
-
-GitHub's regular Git storage is not a good place for 16 GiB of generated binary
-viewer outputs.
-
-## Important Files
-
-| Path | Purpose |
+| Folder or file | Purpose |
 | --- | --- |
-| `viewer/app.html` | Main educational product shell. |
-| `viewer/index.html` | NiiVue MRI slice viewer. |
-| `viewer/splat.html` | Three.js 3D lesion splat viewer. |
-| `scripts/regenerate_browser_splats.py` | Regenerates responsive browser splats from MRI plus expert lesion mask. |
-| `scripts/verify_viewer_dataset.py` | Verifies that all viewer subjects have required artifacts. |
-| `src/fcd_prototype/ds004199_download.py` | OpenNeuro dataset download helper. |
+| `viewer/app.html`, `app.css`, `app.js` | Main viewer and two side panels |
+| `viewer/index.html` | NiiVue 2D and 3D MRI views |
+| `viewer/splat.html` | Three.js Gaussian splat view |
+| `scripts/run_viewer.py` | Checked downloads and local launcher |
+| `data/release-assets.json` | Release filenames, case lists, sizes, and checksums |
+| `scripts/package_release_data.py` | Rebuild public data packages |
+| `src/fcd_prototype/` | MRI-processing and experimental research pipeline |
+| `tests/` | Source, viewer, and release-installer tests |
 
-## Validation
-
-Current test command:
-
-```bash
-npm test
-```
-
-Current expected result:
-
-```text
-13 JavaScript tests passed
-689 Python tests passed
-subjects=85
-ok=85
-bad=0
-total_splat_points=7537985
-```
+See [third-party notices](THIRD_PARTY_NOTICES.md) for dependency and data terms.
+Public availability does not assign a new license to the project's own code.

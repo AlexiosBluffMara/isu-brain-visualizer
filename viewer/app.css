@@ -19,6 +19,8 @@
   --muted: #a1a1aa;
   --soft: #d1d1d6;
   --glass: rgba(20, 20, 24, 0.72);
+  --side-text-scale: 2;
+  --side-panel-width: clamp(300px, 23vw, 540px);
 }
 
 * { box-sizing: border-box; }
@@ -108,7 +110,7 @@ input {
 
 .control-strip {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) 1fr auto;
+  grid-template-columns: minmax(180px, 260px) minmax(260px, 1fr) auto auto;
   gap: 12px;
   align-items: center;
   padding: 0 24px 16px;
@@ -142,7 +144,8 @@ input {
   background: rgba(var(--splat-orange-rgb), 0.28);
 }
 
-.quick-row {
+.quick-row,
+.quiz-row {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -152,19 +155,29 @@ input {
   border-color: var(--gold);
 }
 
+.quiz-row button[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: rgba(255, 204, 0, 0.18);
+}
+
+.quiz-row button[data-lesion-visibility="shown"][aria-pressed="true"] {
+  border-color: var(--semantic-lesion-red);
+  background: rgba(var(--lesion-red-rgb), 0.22);
+}
+
 .main {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(280px, 350px);
+  grid-template-columns: var(--side-panel-width) minmax(0, 1fr) var(--side-panel-width);
   background: radial-gradient(circle at 50% -20%, rgba(10, 132, 255, 0.12), transparent 32%), #050507;
 }
 
 .main.subjects-collapsed {
-  grid-template-columns: 56px minmax(0, 1fr) minmax(260px, 330px);
+  grid-template-columns: 56px minmax(0, 1fr) var(--side-panel-width);
 }
 
 .main.guide-collapsed {
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) 56px;
+  grid-template-columns: var(--side-panel-width) minmax(0, 1fr) 56px;
 }
 
 .main.subjects-collapsed.guide-collapsed {
@@ -173,7 +186,10 @@ input {
 
 .rail,
 .explain {
+  min-width: 0;
   min-height: 0;
+  font-size: calc(1rem * var(--side-text-scale));
+  overflow-wrap: anywhere;
   overflow: auto;
   border-right: 1px solid var(--border);
   background: var(--glass);
@@ -316,8 +332,8 @@ input {
 
 .case-card dl div {
   display: grid;
-  grid-template-columns: 92px 1fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   align-items: baseline;
 }
 
@@ -441,6 +457,16 @@ input {
 .source-pill.splat-source {
   border-color: rgba(var(--splat-orange-rgb), 0.48);
   background: rgba(var(--splat-orange-rgb), 0.13);
+}
+
+.source-pill.quiz-source {
+  border-color: rgba(255, 204, 0, 0.46);
+  background: rgba(255, 204, 0, 0.12);
+}
+
+.source-pill.answer-source {
+  border-color: rgba(var(--lesion-red-rgb), 0.48);
+  background: rgba(var(--lesion-red-rgb), 0.13);
 }
 
 .viewer-actions {
@@ -644,6 +670,31 @@ iframe {
   font-size: 0.82rem;
 }
 
+/* Double only the side-panel type. Keep the brain and toolbar at their own scale. */
+.rail-title,
+.explain-title { min-width: 0; }
+:is(.rail, .explain) .panel-toggle { font-size: calc(0.72rem * var(--side-text-scale)); }
+:is(.rail, .explain) .eyebrow { font-size: calc(0.68rem * var(--side-text-scale)); }
+.rail h1,
+.explain h2 { font-size: calc(1rem * var(--side-text-scale)); }
+.case-card h2,
+.guide-card h3 { font-size: calc(0.94rem * var(--side-text-scale)); }
+.case-card dt,
+.browser-card label span { font-size: calc(0.68rem * var(--side-text-scale)); }
+.case-card dd,
+.browser-card a { font-size: calc(0.78rem * var(--side-text-scale)); }
+.subject-group-title { font-size: calc(0.72rem * var(--side-text-scale)); }
+.subject-id { font-size: calc(0.9rem * var(--side-text-scale)); }
+.subject-meta { font-size: calc(0.76rem * var(--side-text-scale)); }
+.term strong { font-size: calc(0.86rem * var(--side-text-scale)); }
+.term p,
+.guide-card p,
+.status-line { font-size: calc(0.82rem * var(--side-text-scale)); }
+.guide-card ul { font-size: calc(0.8rem * var(--side-text-scale)); }
+.gallery-item span { font-size: calc(0.74rem * var(--side-text-scale)); }
+.browser-card select { width: 100%; min-width: 0; }
+.subject-button { padding-block: 10px; }
+
 @media (max-width: 1120px) {
   body { overflow: auto; }
   .app { height: auto; min-height: 100vh; }
@@ -656,8 +707,11 @@ iframe {
   .main.subjects-collapsed.guide-collapsed {
     grid-template-columns: 1fr;
   }
-  .mode-row { justify-content: flex-start; flex-wrap: wrap; }
+  .mode-row,
+  .quick-row,
+  .quiz-row { justify-content: flex-start; flex-wrap: wrap; }
   .main { min-height: 1200px; }
   .rail,
   .explain { max-height: 340px; }
+  .stage { min-height: 700px; }
 }

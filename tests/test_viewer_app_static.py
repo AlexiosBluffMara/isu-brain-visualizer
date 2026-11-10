@@ -102,6 +102,21 @@ def test_app_has_safe_subject_switching_controls():
     assert "history.replaceState" in js
 
 
+def test_app_has_quiz_and_reveal_lesion_modes():
+    html = _html()
+    js = _js()
+    core = _core()
+    assert 'data-lesion-visibility="hidden"' in html
+    assert 'data-lesion-visibility="shown"' in html
+    assert 'id="quiz-state-label"' in html
+    assert "Quiz mode: expert lesion hidden" in js
+    assert "Answer mode: expert lesion shown" in js
+    assert "Hidden for quiz" in js
+    assert "lesionVisibility" in js
+    assert "normalizeLesionVisibility" in core
+    assert 'params.set("lesion", normalizeLesionVisibility(lesion));' in core
+
+
 def test_app_has_collapsible_side_panels_and_full_dataset_terms():
     html = _html()
     js = _js()

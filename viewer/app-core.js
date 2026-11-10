@@ -1,6 +1,8 @@
 const DEFAULT_ROOT = "/outputs/end_to_end_fcd85_hd";
 const DEFAULT_SUBJECT = "sub-00058";
 const DEFAULT_SPLAT = "lesion-highlighted";
+const DEFAULT_LESION_VISIBILITY = "shown";
+const VIEWER_ASSET_VERSION = "20260709-quiz-lesion";
 
 const TERM_EXPLANATIONS = {
   MRI: "The original brain scan. Think of it as a stack of thin picture slices through the head.",
@@ -56,14 +58,30 @@ function manifestUrl({ root = DEFAULT_ROOT, subject = DEFAULT_SUBJECT } = {}) {
   return `${cleanRoot(root)}/${normalizeSubjectId(subject)}/manifest.json`;
 }
 
-function niivueUrl({ root = DEFAULT_ROOT, subject = DEFAULT_SUBJECT, embed = false, layout = "", base = "" } = {}) {
+function normalizeLesionVisibility(value) {
+  return String(value || "").trim().toLowerCase() === "hidden" ? "hidden" : DEFAULT_LESION_VISIBILITY;
+}
+
+function shouldWriteLesionVisibility(value) {
+  return ["hidden", "shown"].includes(String(value || "").trim().toLowerCase());
+}
+
+function niivueUrl({
+  root = DEFAULT_ROOT,
+  subject = DEFAULT_SUBJECT,
+  embed = false,
+  layout = "",
+  base = "",
+  lesion = "",
+} = {}) {
   const params = new URLSearchParams();
   params.set("root", cleanRoot(root));
   params.set("subject", normalizeSubjectId(subject));
   if (embed) params.set("embed", "1");
   if (["1", "2", "3", "3-2d", "3-3d", "4"].includes(String(layout))) params.set("layout", String(layout));
   if (["flair", "t1w", "t2w"].includes(String(base))) params.set("base", String(base));
-  params.set("v", "20260705-t1w-3d-mri");
+  if (shouldWriteLesionVisibility(lesion)) params.set("lesion", normalizeLesionVisibility(lesion));
+  params.set("v", VIEWER_ASSET_VERSION);
   return `/viewer/?${params.toString()}`;
 }
 
@@ -73,6 +91,7 @@ function splatUrl({
   splat = DEFAULT_SPLAT,
   embed = false,
   view = "",
+  lesion = "",
 } = {}) {
   const params = new URLSearchParams();
   params.set("root", cleanRoot(root));
@@ -80,6 +99,7 @@ function splatUrl({
   params.set("splat", splat || DEFAULT_SPLAT);
   if (embed) params.set("embed", "1");
   if (["front", "left", "right", "top", "zoom"].includes(String(view))) params.set("view", String(view));
+  if (shouldWriteLesionVisibility(lesion)) params.set("lesion", normalizeLesionVisibility(lesion));
   return `/viewer/splat.html?${params.toString()}`;
 }
 
@@ -214,8 +234,10 @@ export {
   DEFAULT_ROOT,
   DEFAULT_SUBJECT,
   DEFAULT_SPLAT,
+  DEFAULT_LESION_VISIBILITY,
   DEMO_SUBJECTS,
   TERM_EXPLANATIONS,
+  VIEWER_ASSET_VERSION,
   buildDemoLinks,
   cleanRoot,
   explanationFor,
@@ -230,6 +252,7 @@ export {
   manifestUrl,
   nextSubjectId,
   niivueUrl,
+  normalizeLesionVisibility,
   normalizeSubjectId,
   normalizeSubjects,
   parseSubjectText,

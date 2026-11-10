@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ISU Brain Visualizer</title>
-  <link rel="stylesheet" href="/viewer/app.css?v=20260705-semantic-colors-v2" />
+  <link rel="stylesheet" href="/viewer/app.css?v=20261109-large-side-text" />
 </head>
 <body>
   <div class="app">
@@ -25,6 +25,10 @@
           <button id="prev-subject" type="button" title="Load the previous subject.">Prev</button>
           <button id="next-subject" type="button" title="Load the next subject.">Next</button>
           <button id="export-snapshot" type="button" title="Export a screenshot of the current teaching view.">Export Snapshot</button>
+        </div>
+        <div class="quiz-row" role="group" aria-label="Lesion answer visibility">
+          <button type="button" data-lesion-visibility="hidden" aria-pressed="false" title="Hide the expert lesion overlay and lesion measurements for student quiz mode.">Quiz Mode</button>
+          <button type="button" data-lesion-visibility="shown" aria-pressed="true" title="Reveal the expert lesion overlay and lesion measurements for answer review.">Reveal Lesion</button>
         </div>
       </div>
     </header>
@@ -114,6 +118,7 @@
             <h2 id="viewer-title">Loading subject...</h2>
             <p id="viewer-subtitle">Loading the MRI and lesion-highlighted splat.</p>
             <p id="mri-source-label" class="source-pill" title="Shows which MRI modality is being displayed in the active viewer.">MRI source: loading...</p>
+            <p id="quiz-state-label" class="source-pill quiz-source" title="Shows whether the expert lesion answer is hidden for quiz mode or revealed for review.">Answer mode: expert lesion shown</p>
           </div>
           <div class="viewer-actions">
             <a id="open-current" href="/viewer/" target="_blank" rel="noreferrer"><button id="open-current-button" type="button" class="primary" title="Open the active viewer in a separate full-page browser tab.">Open MRI in Full Viewer</button></a>
@@ -165,8 +170,8 @@
         </section>
         <section class="guide-card color-card">
           <h3>Color legend</h3>
-          <div class="legend-row"><span class="swatch red"></span><p><strong>Red</strong> is the confirmed expert lesion mask from the OpenNeuro MRI dataset.</p></div>
-          <div class="legend-row"><span class="swatch orange"></span><p><strong>Orange</strong> is that same lesion mask after conversion into the 3D Gaussian splat view.</p></div>
+          <div class="legend-row"><span class="swatch red"></span><p id="lesion-legend"><strong>Red</strong> is the confirmed expert lesion mask from the OpenNeuro MRI dataset.</p></div>
+          <div class="legend-row"><span class="swatch orange"></span><p id="splat-legend"><strong>Orange</strong> is that same lesion mask after conversion into the 3D Gaussian splat view.</p></div>
           <div class="legend-row"><span class="swatch dark"></span><p><strong>Black or dark areas</strong> are background, masked space, low MRI signal, or transparent empty space.</p></div>
         </section>
         <section class="guide-card term-panel">
@@ -177,6 +182,6 @@
       </aside>
     </main>
   </div>
-  <script type="module" src="/viewer/app.js?v=20260705-t1w-3d-mri"></script>
+  <script type="module" src="/viewer/app.js?v=20260709-quiz-lesion"></script>
 </body>
 </html>

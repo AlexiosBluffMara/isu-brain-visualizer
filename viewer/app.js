@@ -12,10 +12,11 @@ import {
   manifestUrl,
   nextSubjectId,
   niivueUrl,
+  normalizeLesionVisibility,
   normalizeSubjects,
   parseSubjectText,
   splatUrl,
-} from "./app-core.js?v=20260705-t1w-3d-mri";
+} from "./app-core.js?v=20260709-quiz-lesion";
 
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
@@ -26,10 +27,17 @@ const modeAliases = {
   splat: "splat",
 };
 
+function requestedLesionVisibility(searchParams) {
+  const requested = searchParams.get("lesion");
+  if (requested === "hidden" || searchParams.get("quiz") === "1") return "hidden";
+  return normalizeLesionVisibility(requested);
+}
+
 const state = {
-  root: new URLSearchParams(window.location.search).get("root") || DEFAULT_ROOT,
-  subject: new URLSearchParams(window.location.search).get("subject") || DEFAULT_SUBJECT,
+  root: params.get("root") || DEFAULT_ROOT,
+  subject: params.get("subject") || DEFAULT_SUBJECT,
   mode: modeAliases[requestedMode] || "mri2d",
+  lesionVisibility: requestedLesionVisibility(params),
   groupFilter: "all",
   subjects: [],
   manifests: {},
@@ -51,6 +59,9 @@ const els = {
   viewerTitle: document.getElementById("viewer-title"),
   viewerSubtitle: document.getElementById("viewer-subtitle"),
   mriSourceLabel: document.getElementById("mri-source-label"),
+  quizStateLabel: document.getElementById("quiz-state-label"),
+  lesionLegend: document.getElementById("lesion-legend"),
+  splatLegend: document.getElementById("splat-legend"),
   groupFilterSelect: document.getElementById("group-filter"),
   subjectCardTitle: document.getElementById("subject-card-title"),
   subjectDataset: document.getElementById("subject-dataset"),
@@ -82,6 +93,10 @@ const els = {
   main: document.querySelector(".main"),
 };
 
+function lesionAnswerHidden() {
+  return state.lesionVisibility === "hidden";
+}
+
 function setStatus(text) {
   els.status.textContent = text;
 }
@@ -93,7 +108,7 @@ async function fetchJson(url) {
 }
 
 async function loadSubjects() {
-  setStatus("Loading the 85-subject FCD dataset list...");
+  setStatus("Loading available FCD cases...");
   let subjectIds = [];
   try {
     const textResponse = await fetch("/outputs/fcd85_subjects.txt", { cache: "no-store" });
@@ -106,7 +121,7 @@ async function loadSubjects() {
   }
 
   const demoFirst = [
-    ...DEMO_SUBJECTS,
+    ...DEMO_SUBJECTS.filter((subject) => subjectIds.includes(subject)),
     ...subjectIds.filter((subject) => !DEMO_SUBJECTS.includes(subject)),
   ];
 
@@ -118,7 +133,10 @@ async function loadSubjects() {
     }
   }));
 
-  state.subjects = normalizeSubjects(demoFirst, state.manifests);
+  const available = demoFirst.filter((subject) => state.manifests[subject]);
+  if (!available.length) throw new Error("No case data found. Run python scripts/run_viewer.py --download-demo");
+  if (!available.includes(state.subject)) state.subject = available[0];
+  state.subjects = normalizeSubjects(available, state.manifests);
   state.filtered = state.subjects;
   renderSubjectList();
   renderTermList();
@@ -182,10 +200,11 @@ function renderSubjectButton(subject) {
     const location = formatLocation(subject.hemisphere, subject.lobe);
     const group = expandGroup(subject.group);
     const histopathology = expandHistopathology(subject.histopathology);
+    const lesionSummary = lesionAnswerHidden() ? "Quiz case" : formatVolume(subject.lesionVolumeMm3);
     return `
       <button class="subject-button${active}" data-subject="${subject.id}" title="Open ${subject.id} in the MRI and lesion-splat viewers.">
         <span class="subject-id">${subject.id}</span>
-        <span class="subject-meta">${escapeHtml(location)} | ${escapeHtml(group)} | ${escapeHtml(histopathology)} | ${formatVolume(subject.lesionVolumeMm3)}</span>
+        <span class="subject-meta">${escapeHtml(location)} | ${escapeHtml(group)} | ${escapeHtml(histopathology)} | ${escapeHtml(lesionSummary)}</span>
       </button>
     `;
 }
@@ -235,9 +254,12 @@ function preferredMriBaseForMode(mode) {
   return mode === "mri3d" ? "t1w" : "flair";
 }
 
-function mriSourceLabelForMode(mode, manifest) {
+function mriSourceLabelForMode(mode, manifest, lesionVisibility = state.lesionVisibility) {
+  const hidden = lesionVisibility === "hidden";
   if (mode === "splat") {
-    return "3D Gaussian Splat source: MRI anatomy plus the provided expert lesion mask.";
+    return hidden
+      ? "3D Gaussian Splat source: MRI anatomy is shown; expert lesion points are hidden for quiz mode."
+      : "3D Gaussian Splat source: MRI anatomy plus the provided expert lesion mask.";
   }
 
   const preferred = preferredMriBaseForMode(mode);
@@ -248,9 +270,15 @@ function mriSourceLabelForMode(mode, manifest) {
     : "";
 
   if (mode === "mri3d") {
-    return `MRI source: ${label}. This 3D MRI view uses the anatomy scan loaded from the subject NIfTI file.${fallback}`;
+    const answerCopy = hidden
+      ? " The expert lesion mask is hidden for quiz mode."
+      : "";
+    return `MRI source: ${label}. This 3D MRI view uses the anatomy scan loaded from the subject NIfTI file.${answerCopy}${fallback}`;
   }
-  return `MRI source: ${label}. This 2D MRI view is the lesion-review scan; the red overlay is the provided expert lesion mask.${fallback}`;
+  const overlayCopy = hidden
+    ? " The expert lesion overlay is hidden so students can inspect the scan first."
+    : " the red overlay is the provided expert lesion mask.";
+  return `MRI source: ${label}. This 2D MRI view is the lesion-review scan;${overlayCopy}${fallback}`;
 }
 
 function renderMetrics() {
@@ -261,6 +289,7 @@ function renderMetrics() {
   const geometry = viewerMeta.geometry || {};
   const roi = manifest.viewer_meta?.roi || {};
   const location = formatLocation(subject.hemisphere, subject.lobe);
+  const hidden = lesionAnswerHidden();
 
   els.subjectCardTitle.textContent = state.subject;
   els.subjectDataset.textContent = "OpenNeuro ds004199";
@@ -312,14 +341,57 @@ function renderMetrics() {
       ],
     },
   };
+  const quizCopy = {
+    mri2d: {
+      subtitle: "Three 2D slice views from the real NIfTI MRI: coronal, sagittal, and axial. The expert lesion overlay is hidden for quiz mode.",
+      guideCopy: "Students see the source MRI first and decide where the abnormal region might be before the answer is revealed.",
+      guideItems: [
+        "Start with the anatomy and signal pattern before looking at the expert label.",
+        "Use the reveal control when the student is ready to compare their answer with the dataset mask.",
+        "The hidden answer mode does not remove the MRI data; it only hides the expert lesion annotation.",
+      ],
+    },
+    mri3d: {
+      subtitle: "NiiVue renders a direct 3D MRI volume from NIfTI voxel data. The expert lesion mask is hidden for quiz mode.",
+      guideCopy: "This lets students build a 3D mental model from the anatomy before checking the expert-marked lesion location.",
+      guideItems: [
+        "Best for asking students to reason about where the lesion might sit in the full brain volume.",
+        "Uses the source NIfTI voxels directly; it is not reconstructed from splat points.",
+        "Reveal the answer to place the expert mask back into the same MRI coordinate space.",
+      ],
+    },
+    splat: {
+      subtitle: "Three.js shows the converted 3D Gaussian splat anatomy. The orange expert lesion points are hidden for quiz mode.",
+      guideCopy: "This keeps the 3D teaching object visible while withholding the lesion answer until review.",
+      guideItems: [
+        "Useful for asking students to orient themselves in the 3D anatomy first.",
+        "The expert lesion splat points are still part of the source artifact, but they are rendered invisible in quiz mode.",
+        "Reveal the answer to compare the student's guess with the converted expert lesion mask.",
+      ],
+    },
+  };
   const activeCopy = copy[state.mode] || copy.mri2d;
-  els.viewerTitle.textContent = activeCopy.title;
-  els.viewerSubtitle.textContent = activeCopy.subtitle;
-  els.mriSourceLabel.textContent = mriSourceLabelForMode(state.mode, manifest);
+  const visibleCopy = hidden
+    ? { ...activeCopy, ...quizCopy[state.mode] }
+    : activeCopy;
+  els.viewerTitle.textContent = visibleCopy.title;
+  els.viewerSubtitle.textContent = visibleCopy.subtitle;
+  els.mriSourceLabel.textContent = mriSourceLabelForMode(state.mode, manifest, state.lesionVisibility);
   els.mriSourceLabel.classList.toggle("splat-source", state.mode === "splat");
-  els.viewGuideTitle.textContent = activeCopy.guideTitle;
-  els.viewGuideCopy.textContent = activeCopy.guideCopy;
-  els.viewGuideList.innerHTML = activeCopy.guideItems
+  els.quizStateLabel.textContent = hidden
+    ? "Quiz mode: expert lesion hidden"
+    : "Answer mode: expert lesion shown";
+  els.quizStateLabel.classList.toggle("quiz-source", hidden);
+  els.quizStateLabel.classList.toggle("answer-source", !hidden);
+  els.lesionLegend.innerHTML = hidden
+    ? "<strong>Red</strong> expert lesion mask is hidden for quiz mode."
+    : "<strong>Red</strong> is the confirmed expert lesion mask from the OpenNeuro MRI dataset.";
+  els.splatLegend.innerHTML = hidden
+    ? "<strong>Orange</strong> expert lesion splat points are hidden for quiz mode."
+    : "<strong>Orange</strong> is that same lesion mask after conversion into the 3D Gaussian splat view.";
+  els.viewGuideTitle.textContent = visibleCopy.guideTitle;
+  els.viewGuideCopy.textContent = visibleCopy.guideCopy;
+  els.viewGuideList.innerHTML = visibleCopy.guideItems
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("");
   renderLesionCard(subject, manifest, roi);
@@ -336,6 +408,19 @@ function formatIjk(value) {
 
 function renderLesionCard(subject, manifest, roi) {
   const profile = manifest.browser_splat_profile || {};
+  const browserSplatMeta = manifest.patient_splat_lesion_highlighted_meta || {};
+  if (lesionAnswerHidden()) {
+    const anatomyPoints = profile.anatomy_points || browserSplatMeta.n_anatomy_points;
+    els.lesionCardTitle.textContent = `${state.subject} quiz answer hidden`;
+    els.lesionVolume.textContent = "Hidden for quiz";
+    els.lesionVoxels.textContent = "Hidden for quiz";
+    els.lesionCenter.textContent = "Hidden for quiz";
+    els.lesionBounds.textContent = "Hidden for quiz";
+    els.lesionSource.textContent = "Reveal answer to show";
+    els.splatPoints.textContent = formatPoints(anatomyPoints);
+    els.splatSource.textContent = "MRI anatomy; lesion answer hidden";
+    return;
+  }
   els.lesionCardTitle.textContent = `${state.subject} expert lesion mask`;
   els.lesionVolume.textContent = formatVolume(subject.lesionVolumeMm3);
   els.lesionVoxels.textContent = formatNumber(roi.voxel_count);
@@ -361,6 +446,14 @@ function setMode(mode) {
   els.niivueWrap.classList.toggle("hidden", state.mode === "splat");
   els.splatWrap.classList.toggle("hidden", state.mode !== "splat");
   els.shared3dControls.classList.toggle("hidden", !is3dMode());
+}
+
+function setLesionVisibility(value) {
+  state.lesionVisibility = normalizeLesionVisibility(value);
+  document.body.dataset.lesionVisibility = state.lesionVisibility;
+  for (const button of document.querySelectorAll("[data-lesion-visibility]")) {
+    button.setAttribute("aria-pressed", button.dataset.lesionVisibility === state.lesionVisibility ? "true" : "false");
+  }
 }
 
 function is3dMode() {
@@ -397,10 +490,11 @@ function refreshFrames() {
   const manifest = state.manifests[state.subject] || {};
   const mriLayout = state.mode === "mri3d" ? "4" : "3-2d";
   const mriBase = resolveMriBase(manifest, preferredMriBaseForMode(state.mode));
-  const mri = niivueUrl({ root: state.root, subject: state.subject, embed: true, layout: mriLayout, base: mriBase });
-  const splat = splatUrl({ root: state.root, subject: state.subject, splat: "lesion-highlighted", embed: true });
-  const mriFull = niivueUrl({ root: state.root, subject: state.subject, layout: mriLayout, base: mriBase });
-  const splatFull = splatUrl({ root: state.root, subject: state.subject, splat: "lesion-highlighted" });
+  const viewerUrlState = { root: state.root, subject: state.subject, lesion: state.lesionVisibility };
+  const mri = niivueUrl({ ...viewerUrlState, embed: true, layout: mriLayout, base: mriBase });
+  const splat = splatUrl({ ...viewerUrlState, splat: "lesion-highlighted", embed: true });
+  const mriFull = niivueUrl({ ...viewerUrlState, layout: mriLayout, base: mriBase });
+  const splatFull = splatUrl({ ...viewerUrlState, splat: "lesion-highlighted" });
   els.niivueLoading.classList.add("active");
   els.splatLoading.classList.add("active");
   els.niivueFrame.src = mri;
@@ -414,7 +508,13 @@ function refreshFrames() {
   els.openCurrent.href = activeUrl;
   els.openCurrentButton.textContent = activeLabel;
   els.openCurrentButton.title = `Open the current ${activeLabel.replace("Open ", "").replace(" in Full Viewer", "")} as a separate full-page browser view.`;
-  window.history.replaceState(null, "", `/viewer/app.html?root=${encodeURIComponent(state.root)}&subject=${state.subject}&mode=${state.mode}`);
+  const historyParams = new URLSearchParams({
+    root: state.root,
+    subject: state.subject,
+    mode: state.mode,
+    lesion: state.lesionVisibility,
+  });
+  window.history.replaceState(null, "", `/viewer/app.html?${historyParams.toString()}`);
 }
 
 function selectSubject(subject) {
@@ -445,6 +545,13 @@ function wireEvents() {
   for (const button of document.querySelectorAll("[data-mode]")) {
     button.addEventListener("click", () => {
       setMode(button.dataset.mode);
+      refreshFrames();
+    });
+  }
+
+  for (const button of document.querySelectorAll("[data-lesion-visibility]")) {
+    button.addEventListener("click", () => {
+      setLesionVisibility(button.dataset.lesionVisibility);
       refreshFrames();
     });
   }
@@ -515,17 +622,22 @@ function downloadSnapshotMetadata() {
   const manifest = state.manifests[state.subject] || {};
   const mriLayout = state.mode === "mri3d" ? "4" : "3-2d";
   const mriBase = resolveMriBase(manifest, preferredMriBaseForMode(state.mode));
+  const hidden = lesionAnswerHidden();
+  const viewerUrlState = { root: state.root, subject: state.subject, lesion: state.lesionVisibility };
   const payload = {
     title: "ISU Brain Visualizer teaching snapshot",
     subject: state.subject,
     mode: state.mode,
+    lesionVisibility: state.lesionVisibility,
     location: formatLocation(subject.hemisphere, subject.lobe),
     histopathology: expandHistopathology(subject.histopathology),
-    lesionVolume: formatVolume(subject.lesionVolumeMm3),
+    lesionVolume: hidden ? "Hidden for quiz" : formatVolume(subject.lesionVolumeMm3),
     splatPoints: formatPoints(subject.splatPoints),
-    lesionSource: manifest.browser_splat_profile?.source_truth_for_lesion || "provided expert lesion mask",
-    mriUrl: niivueUrl({ root: state.root, subject: state.subject, layout: mriLayout, base: mriBase }),
-    splatUrl: splatUrl({ root: state.root, subject: state.subject, splat: "lesion-highlighted" }),
+    lesionSource: hidden
+      ? "Hidden for quiz"
+      : manifest.browser_splat_profile?.source_truth_for_lesion || "provided expert lesion mask",
+    mriUrl: niivueUrl({ ...viewerUrlState, layout: mriLayout, base: mriBase }),
+    splatUrl: splatUrl({ ...viewerUrlState, splat: "lesion-highlighted" }),
     generatedAt: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -538,6 +650,7 @@ function downloadSnapshotMetadata() {
 
 wireEvents();
 setMode(state.mode);
+setLesionVisibility(state.lesionVisibility);
 loadSubjects()
   .then(refreshFrames)
   .catch((error) => {

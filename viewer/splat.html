@@ -75,6 +75,8 @@
     }
     button:hover { border-color: #ffb340; }
     button.act { border-color: #ff9500; background: #ff9500; color: #111; }
+    button[data-lesion-visibility][aria-pressed="true"] { border-color: #ffcc00; background: #2a2409; color: #ffef99; }
+    button[data-lesion-visibility="shown"][aria-pressed="true"] { border-color: #ff9500; background: #ff9500; color: #111; }
     #canvas-wrap { flex: 1; min-height: 0; position: relative; }
     #three-canvas { display: block; width: 100%; height: 100%; }
     #compare-labels {
@@ -183,6 +185,12 @@
     </select>
   </div>
 
+  <div class="grp" role="group" aria-label="Lesion answer visibility">
+    <span class="lbl">Answer</span>
+    <button id="btn-lesion-hidden" type="button" data-lesion-visibility="hidden" aria-pressed="false">Quiz</button>
+    <button id="btn-lesion-shown" type="button" data-lesion-visibility="shown" aria-pressed="true" class="act">Reveal</button>
+  </div>
+
     <div class="grp">
       <button id="btn-reset-cam">Reset camera</button>
       <button id="btn-niivue">Open MRI Viewer</button>
@@ -287,6 +295,30 @@ animate();
 // ---------------------------------------------------------------------------
 const status = (msg) => { document.getElementById("status-msg").textContent = msg; };
 let subjects = [];   // [{subject, group, manifest, ...}]
+let lesionVisibility = new URLSearchParams(window.location.search).get("lesion") === "hidden"
+  ? "hidden"
+  : "shown";
+
+function normalizeLesionVisibility(value) {
+  return String(value || "").trim().toLowerCase() === "hidden" ? "hidden" : "shown";
+}
+
+function lesionAnswerHidden() {
+  return lesionVisibility === "hidden";
+}
+
+function setLesionVisibility(value, { updateMesh = true } = {}) {
+  lesionVisibility = normalizeLesionVisibility(value);
+  for (const button of document.querySelectorAll("[data-lesion-visibility]")) {
+    const active = button.dataset.lesionVisibility === lesionVisibility;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    button.classList.toggle("act", active && lesionVisibility === "shown");
+  }
+  if (updateMesh && currentPoints) {
+    applyLesionVisibilityToObject(currentPoints);
+    maybeDepthSortCurrentSplat(true);
+  }
+}
 
 function expandGroupLabel(group) {
   const value = String(group || "").trim().toLowerCase();
@@ -450,6 +482,43 @@ function splatCountOf(obj) {
     total += child.userData?.splatCount || 0;
   });
   return total;
+}
+
+function lesionPointRange(mesh) {
+  const meta = mesh.userData?.sourceMeta || {};
+  const n = mesh.userData?.splatCount ?? mesh.geometry?.getAttribute("aOpacity")?.count ?? 0;
+  const lesionPoints = Number(meta.n_lesion_points ?? meta.lesion_points);
+  if (!Number.isFinite(lesionPoints) || lesionPoints <= 0 || lesionPoints >= n) return null;
+  const anatomyPoints = Number(meta.n_anatomy_points ?? meta.anatomy_points);
+  const start = Number.isFinite(anatomyPoints) && anatomyPoints >= 0 && anatomyPoints + lesionPoints <= n
+    ? anatomyPoints
+    : n - lesionPoints;
+  return { start, end: Math.min(n, start + lesionPoints) };
+}
+
+function applyLesionVisibilityToMesh(mesh) {
+  const source = mesh.userData?.sourceSplatAttributes;
+  const attr = mesh.geometry?.getAttribute("aOpacity");
+  if (!source?.originalOpacities || !source.opacities || !attr) return;
+
+  source.opacities.set(source.originalOpacities);
+  const range = lesionPointRange(mesh);
+  if (lesionAnswerHidden() && range) {
+    source.opacities.fill(0, range.start, range.end);
+  }
+
+  attr.array.set(source.opacities);
+  attr.needsUpdate = true;
+  mesh.userData.depthSortState = {
+    lastCameraPosition: null,
+    lastCameraQuaternion: null,
+  };
+}
+
+function applyLesionVisibilityToObject(obj) {
+  for (const mesh of collectSplatMeshes(obj)) {
+    applyLesionVisibilityToMesh(mesh);
+  }
 }
 
 function makePairedComparisonGroup(patientMesh, normalMesh, residualMesh, compareMode = "paired_patient_normal_residual") {
@@ -879,7 +948,9 @@ async function loadSubject(subjectId) {
   let meta = inlineMeta;
   if (metaKey) {
     const metaName = getArtifact(manifest, metaKey);
-    if (metaName) {
+    if (metaName && typeof metaName === "object") {
+      meta = metaName;
+    } else if (typeof metaName === "string" && metaName) {
       try {
         const mResp = await fetch(`${root}/${subjectId}/${metaName}`);
         if (mResp.ok) meta = await mResp.json();
@@ -890,6 +961,7 @@ async function loadSubject(subjectId) {
   applyArtifactRenderPreset(artifactLabel, meta);
 
   const pts = await fetchPlyMesh(root, subjectId, plyName, meta);
+  applyLesionVisibilityToObject(pts);
   replacePoints(pts);
   applyInitialCameraViewFromUrl();
 
@@ -897,11 +969,14 @@ async function loadSubject(subjectId) {
   const grp = expandGroupLabel(manifest.group);
   const sortLabel = pts.userData.depthSorted ? " | depth-sorted alpha" : "";
   const qualityLabel = artifactQualityLabel(manifest, artifactLabel, meta, plyName);
+  const answerLabel = lesionAnswerHidden() ? "lesion hidden for quiz" : "expert lesion shown";
   document.getElementById("proto-note").textContent =
-    qualityLabel ? `${artifactLabel} | ${qualityLabel}` : `${artifactLabel} | educational 3D visualization`;
+    qualityLabel
+      ? `${artifactLabel} | ${answerLabel} | ${qualityLabel}`
+      : `${artifactLabel} | ${answerLabel} | educational 3D visualization`;
   status(
     `${subjectId} (${grp}) — ${n.toLocaleString()} points [${artifactLabel}] | ` +
-    `${plyName}${sortLabel}${qualityLabel ? " | " + qualityLabel : ""}`
+    `${plyName}${sortLabel} | ${answerLabel}${qualityLabel ? " | " + qualityLabel : ""}`
   );
   return manifest;
 }
@@ -1040,6 +1115,7 @@ function parsePlyToPoints(buffer, meta) {
     centers: centers.slice(),
     colors: colors.slice(),
     opacities: opacities.slice(),
+    originalOpacities: opacities.slice(),
     scales: scales.slice(),
     scaleVecs: scaleVecs.slice(),
     quats: quats.slice(),
@@ -1155,6 +1231,7 @@ function makeMaterial(meta = null) {
       void main() {
         float r2 = dot(vCorner, vCorner);   // unit ellipse coordinates
         if (r2 > 1.0) discard;
+        if (vOpacity <= 0.0) discard;
         float gaussian;
         float alpha;
         if (uRenderMode == 0) {
@@ -1426,6 +1503,21 @@ document.getElementById("sel-artifact").addEventListener("change", async () => {
   }
 });
 
+for (const button of document.querySelectorAll("[data-lesion-visibility]")) {
+  button.addEventListener("click", async () => {
+    const subjectId = document.getElementById("sel-subject").value;
+    setLesionVisibility(button.dataset.lesionVisibility);
+    if (subjectId && currentPoints) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("lesion", lesionVisibility);
+      window.history.replaceState(null, "", `/viewer/splat.html?${params.toString()}`);
+      status(lesionAnswerHidden()
+        ? "Quiz mode: expert lesion points are hidden."
+        : "Answer mode: expert lesion points are shown.");
+    }
+  });
+}
+
 document.getElementById("btn-reset-cam").addEventListener("click", () => {
   resetCameraToCurrentSplat();
 });
@@ -1437,6 +1529,7 @@ document.getElementById("btn-niivue").addEventListener("click", () => {
   const root = params.get("root");
   let url = `/viewer/?subject=${subjectId}`;
   if (root) url += `&root=${encodeURIComponent(root)}`;
+  url += `&lesion=${lesionVisibility}`;
   window.open(url, "_blank");
 });
 
@@ -1451,6 +1544,7 @@ window.addEventListener("message", (event) => {
 
 // Auto-load from URL params
 (async () => {
+  setLesionVisibility(lesionVisibility, { updateMesh: false });
   await loadIndex();
   const params = new URLSearchParams(window.location.search);
   const req = params.get("subject") || params.get("demo");

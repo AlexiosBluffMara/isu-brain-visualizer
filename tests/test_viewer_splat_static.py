@@ -64,6 +64,16 @@ def test_splat_viewer_exposes_visible_camera_controls():
     assert 'id="btn-view-top"' in html
 
 
+def test_splat_viewer_exposes_quiz_answer_visibility_controls():
+    html = _viewer_html()
+
+    assert 'data-lesion-visibility="hidden"' in html
+    assert 'data-lesion-visibility="shown"' in html
+    assert "function applyLesionVisibilityToObject" in html
+    assert "source.opacities.fill(0, range.start, range.end)" in html
+    assert "lesionVisibility" in html
+
+
 def test_splat_viewer_fetches_regenerated_ply_without_cache():
     html = _viewer_html()
 
